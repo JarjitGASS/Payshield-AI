@@ -1,4 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
+import httpx
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI()
 
