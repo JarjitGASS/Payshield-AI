@@ -1,8 +1,12 @@
 // pages/RegisterPage.tsx
+import { useState } from "react";
 import useBehavioralMonitor from "../hooks/useBehavioralMonitor.hook";
 
 export default function RegisterPage() {
   const { flush } = useBehavioralMonitor();
+  const [isError, setIsError] = useState<boolean | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [result, setResult] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -21,18 +25,18 @@ export default function RegisterPage() {
       behavior: behaviorData,
     };
 
-    console.log("Payload ready for NestJS:", payload);
-
     try {
       const response = await fetch('http://localhost:3000/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      
-      if (response.ok) {
-        alert("Success!");
-      }
+      const result = await response.json();
+
+      setIsError(!result.success);
+      setMessage(result.message);
+      setResult(result.analysis || null);
+
     } catch (err) {
       console.error("Submission error:", err);
     }
@@ -76,7 +80,19 @@ export default function RegisterPage() {
           >
             Login
           </button>
+
         </form>
+        {isError !== null && (
+          <div className={`mt-6 p-4 rounded-lg ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+            {message}
+            {result && (
+              <div className="mt-2 text-sm">
+                <p className="font-semibold">Analysis:</p>
+                <p>{result}</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
