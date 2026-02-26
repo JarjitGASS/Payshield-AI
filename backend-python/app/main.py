@@ -4,6 +4,7 @@ import json
 import os
 from dotenv import load_dotenv
 from services.check_id_card import check_id_card
+from services.verivfy_id_card import verify_id_card
 
 load_dotenv()
 
@@ -36,3 +37,7 @@ async def register(
     file: UploadFile = File(...)
 ):
     return await check_id_card(file, nik, fullname, pob, dob, gender)
+
+@app.post("/verify-id-card")
+async def verify_id_card_endpoint(file: UploadFile = File(...)):
+    return await verify_id_card(file)

@@ -10,7 +10,7 @@ def getClient():
         api_key=os.getenv("QWEN_API_KEY"),
         base_url=os.getenv(
             "QWEN_BASE_URL",
-            "https://dashscope.aliyuncs.com/compatible-mode/v1"
+            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
         )
     )
 

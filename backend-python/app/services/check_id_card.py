@@ -1,10 +1,10 @@
 from qwen.qwen import qwen_file
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 import json
 from datetime import datetime
 
 
-async def check_id_card(file, nik: str, fullname: str, pob: str, dob: str, gender: str):
+async def check_id_card(file: UploadFile, nik: str, fullname: str, pob: str, dob: str, gender: str):
   prompt = """
   You are an OCR and identity extraction system.
 
