@@ -1,0 +1,16 @@
+fastapi[all]
+fastapi
+uvicorn[standard]
+openai
+python-dotenv
+pydantic
+requests
+sqlalchemy
+alembic
+pytest
+httpx
+psycopg2-binary 
+asyncpg
+Pillow
+redis
+python-whois
