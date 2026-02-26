@@ -12,6 +12,11 @@ RULES:
 - If a signal is missing or unknown, treat it as neutral (0.5).
 - Be precise. Return valid JSON only.
 
+IMPORTANT:
+- High name_entropy or name_ngram_entropy alone does NOT indicate risk if the name does not contain digits or symbols and other signals are normal.
+- Only flag SUSPICIOUS_NAME if high entropy is combined with name_has_digits_or_symbols = true, or if high entropy is combined with other suspicious signals (e.g., new email, geo_ip_mismatch, negative sentiment).
+- Do NOT flag common or multicultural names as suspicious based on entropy alone.
+
 OUTPUT FORMAT (strict):
 {
   "risk": <float 0.0-1.0>,
