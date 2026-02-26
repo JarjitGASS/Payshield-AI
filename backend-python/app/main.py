@@ -8,6 +8,7 @@ from services.verivfy_id_card import verify_id_card
 from services.verify_email_age_card import verify_email_age
 from services.name_entropy import shannon_entropy, has_digits_or_symbols, ngram_entropy
 from services.verify_geoip import check_geo_ip, get_real_ip
+from services.sentiment_entity import analyze_company_sentiment
 
 load_dotenv()
 
@@ -73,3 +74,11 @@ async def verify_geo_ip_endpoint(
     ip = get_real_ip(request)
 
     return await check_geo_ip(ip, declared_country, declared_city)
+
+@app.post("/sentiment-entity-analysis")
+async def sentiment_entity_analysis(
+    company_name: str = Form(...)
+):
+    result = await analyze_company_sentiment(company_name)
+
+    return result
