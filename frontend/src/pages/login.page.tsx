@@ -2,7 +2,7 @@
 import { useState } from "react";
 import useBehavioralMonitor from "../hooks/useBehavioralMonitor.hook";
 
-export default function RegisterPage() {
+export default function LoginPage() {
   const { flush } = useBehavioralMonitor();
   const [isError, setIsError] = useState<boolean | null>(null);
   const [message, setMessage] = useState<string | null>(null);
