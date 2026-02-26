@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from services.check_id_card import check_id_card
 from services.verivfy_id_card import verify_id_card
 from services.verify_email_age_card import verify_email_age
+from services.name_entropy import name_entropy
 
 load_dotenv()
 
@@ -47,3 +48,12 @@ async def verify_id_card_endpoint(file: UploadFile = File(...)):
 @app.post("/verify-email-age")
 async def verify_email_age_endpoint(email: str = Form()):
     return await verify_email_age(email)
+
+@app.post("/validate-name-entropy")
+async def validate_name_entropy(name: str = Form()):
+    entropy = name_entropy(name)
+    return {
+        "status": 200,
+        "name": name,
+        "entropy": entropy
+    }

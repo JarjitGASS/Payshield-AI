@@ -1,9 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function RegisterPage() {
   const [isError, setIsError] = useState<boolean | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<string | null>(null);
+  const [sessionStart, setSessionStart] = useState<number>(Date.now());
+
+  useEffect(() => {
+    setSessionStart(Date.now());
+    console.log(sessionStart);
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -11,6 +17,9 @@ export default function RegisterPage() {
 
     const formData = new FormData(form);
 
+    const sessionEnd = Date.now();
+    const sessionDurationSec = Math.floor((sessionStart - sessionEnd) / 1000);
+    
     try {
       const response = await fetch('http://localhost:8000/register', {
         method: 'POST',
