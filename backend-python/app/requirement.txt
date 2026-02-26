@@ -12,3 +12,4 @@ httpx
 psycopg2-binary 
 asyncpg
 Pillow
+redis

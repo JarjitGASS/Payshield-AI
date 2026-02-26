@@ -21,22 +21,17 @@ OUTPUT FORMAT (strict):
 }
 
 AVAILABLE FLAGS:
-- PHONE_SHARED_NETWORK, DEVICE_SHARED_NETWORK, IP_CLUSTER,
-  RAPID_ACCOUNT_CREATION, CROSS_MERCHANT_REUSE
+- DEVICE_SHARED_NETWORK, IP_CLUSTER, CROSS_MERCHANT_REUSE
 """
 
 def run_network_agent(features: NetworkInput) -> AgentResult:
     user_prompt = f"""
 Evaluate synthetic network risk from these signals:
 
-- shared_phone_count: {features.shared_phone_count}
-  (>1 = same phone used on multiple accounts)
 - shared_device_count: {features.shared_device_count}
   (>1 = same device fingerprint on multiple accounts)
 - shared_ip_count: {features.shared_ip_count}
   (>3 in 30 days = suspicious IP cluster)
-- account_age_hours: {features.account_age_hours}h
-  (very new = rapid account creation pattern)
 - cross_merchant_reuse: {features.cross_merchant_reuse}
   (true = device/phone seen across different merchants)
 

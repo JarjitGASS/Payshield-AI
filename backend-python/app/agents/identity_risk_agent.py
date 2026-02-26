@@ -21,7 +21,7 @@ OUTPUT FORMAT (strict):
 }
 
 AVAILABLE FLAGS:
-- KTP_MISMATCH, FACE_MISMATCH, NEW_EMAIL, PHONE_REUSED,
+- KTP_MISMATCH, FACE_MISMATCH, NEW_EMAIL,
   GEO_IP_MISMATCH, SUSPICIOUS_NAME, NEGATIVE_SENTIMENT
 """
 
@@ -35,8 +35,6 @@ Evaluate identity risk from these signals:
   (1.0 = same person, 0.0 = different person)
 - email_age_days: {features.email_age_days}
   (low = recently created email = suspicious)
-- phone_reuse_count: {features.phone_reuse_count}
-  (>1 = phone shared across accounts = suspicious)
 - geo_ip_mismatch: {features.geo_ip_mismatch}
   (true = declared address doesn't match IP location)
 - name_entropy: {features.name_entropy}
