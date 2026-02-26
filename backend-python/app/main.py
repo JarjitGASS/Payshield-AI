@@ -1,12 +1,27 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import json
 import os
 from dotenv import load_dotenv
 from services.imageQwen import analyze_image
+from datetime import datetime
 
 load_dotenv()
 
 app = FastAPI()
+
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,    
+    allow_credentials=True,     
+    allow_methods=["*"],               
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def health_check():
@@ -49,32 +64,39 @@ async def register(
     qwen_gender = qwen["gender"].strip().upper()
     qwen_nik = qwen["nik"].strip()
 
+    try:
+        dob_obj = datetime.strptime(input_dob, "%Y-%m-%d")
+        input_dob = dob_obj.strftime("%d-%m-%Y")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="INVALID_DOB_FORMAT")
+
     if input_gender in ["MALE", "L", "LAKI-LAKI"]:
         input_gender = "LAKI-LAKI"
     elif input_gender in ["FEMALE", "P", "PEREMPUAN"]:
         input_gender = "PEREMPUAN"
 
     if nik != qwen_nik:
-        raise HTTPException(status_code=400, detail="NIK_MISMATCH")
+        raise HTTPException(status_code=400, detail={"message":"NIK_MISMATCH", "analysis": qwen})
 
     if input_name != qwen_name:
-        raise HTTPException(status_code=400, detail="NAME_MISMATCH")
+        raise HTTPException(status_code=400, detail={"message":"NAME_MISMATCH", "analysis": qwen})
 
     if input_pob != qwen_pob:
-        raise HTTPException(status_code=400, detail="POB_MISMATCH")
+        raise HTTPException(status_code=400, detail={"message":"POB_MISMATCH", "analysis": qwen})
 
     if input_dob != qwen_dob:
-        raise HTTPException(status_code=400, detail="DOB_MISMATCH")
+        raise HTTPException(status_code=400, detail={"message":"DOB_MISMATCH", "analysis": qwen})
 
     if input_gender != qwen_gender:
-        raise HTTPException(status_code=400, detail="GENDER_MISMATCH")
+        raise HTTPException(status_code=400, detail={"message":"GENDER_MISMATCH", "analysis": qwen})
 
     return {
         "success": True,
         "message": "IDENTITY VERIFIED",
+        "nik": nik,
         "fullname": fullname,
         "pob": pob,
         "dob": dob,
         "gender": gender,
-        "qwen_result": qwen
+        "analysis": qwen
     }
