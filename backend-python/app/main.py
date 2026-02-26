@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import os
@@ -7,6 +7,7 @@ from services.check_id_card import check_id_card
 from services.verivfy_id_card import verify_id_card
 from services.verify_email_age_card import verify_email_age
 from services.name_entropy import shannon_entropy, has_digits_or_symbols, ngram_entropy
+from services.verify_geoip import check_geo_ip, get_real_ip
 
 load_dotenv()
 
@@ -62,3 +63,13 @@ async def validate_name_entropy(name: str = Form()):
         "ngram_entropy": ngram_result,
         "digitsOrSymbols": name_has_digit_or_symbols
     }
+@app.post("/verify-geo-ip")
+async def verify_geo_ip_endpoint(
+    request: Request,
+    declared_country: str = Form(),
+    declared_city: str = Form(None)
+):
+
+    ip = get_real_ip(request)
+
+    return await check_geo_ip(ip, declared_country, declared_city)
