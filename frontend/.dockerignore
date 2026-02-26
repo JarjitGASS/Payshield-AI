@@ -1,0 +1,38 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output (builder stage produces its own)
+dist/
+build/
+
+# Environment files (secrets must never bake into the image)
+.env
+.env.*
+.env.local
+.env.*.local
+
+# Tests
+coverage/
+*.test.*
+*.spec.*
+__tests__/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Docs
+*.md
+
+# OS
+.DS_Store
+Thumbs.db
