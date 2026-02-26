@@ -1,4 +1,3 @@
-// pages/RegisterPage.tsx
 import { useState } from "react";
 import useBehavioralMonitor from "../hooks/useBehavioralMonitor.hook";
 
