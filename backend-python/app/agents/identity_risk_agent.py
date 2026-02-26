@@ -21,7 +21,7 @@ OUTPUT FORMAT (strict):
 }
 
 AVAILABLE FLAGS:
-- KTP_MISMATCH, FACE_MISMATCH, NEW_EMAIL,
+- KTP_MISMATCH, FACE_MISMATCH, NEW_EMAIL, Name_Validation
   GEO_IP_MISMATCH, SUSPICIOUS_NAME, NEGATIVE_SENTIMENT
 """
 
@@ -37,8 +37,12 @@ Evaluate identity risk from these signals:
   (low = recently created email = suspicious)
 - geo_ip_mismatch: {features.geo_ip_mismatch}
   (true = declared address doesn't match IP location)
+- name_has_digits_or_symbols: {features.name_has_digits_or_symbols}
+  (true = name contains digits or symbols = suspicious)
 - name_entropy: {features.name_entropy}
   (high = random-looking name = suspicious)
+- name_ngram_entropy: {features.name_ngram_entropy}
+  (high = uncommon character sequences = suspicious)
 - entity_sentiment_score: {features.entity_sentiment_score}
   (0.0 = very negative public record, 1.0 = clean)
 

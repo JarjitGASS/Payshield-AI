@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from services.check_id_card import check_id_card
 from services.verivfy_id_card import verify_id_card
 from services.verify_email_age_card import verify_email_age
-from services.name_entropy import name_entropy
+from services.name_entropy import shannon_entropy, has_digits_or_symbols, ngram_entropy
 
 load_dotenv()
 
@@ -51,9 +51,14 @@ async def verify_email_age_endpoint(email: str = Form()):
 
 @app.post("/validate-name-entropy")
 async def validate_name_entropy(name: str = Form()):
-    entropy = name_entropy(name)
+    #entropy g cukup karena kurang akurat jadi harus ada digit validation juga
+    shannon_result = shannon_entropy(name)
+    ngram_result = ngram_entropy(name)
+    name_has_digit_or_symbols = has_digits_or_symbols(name)
     return {
         "status": 200,
         "name": name,
-        "entropy": entropy
+        "shannon_entropy": shannon_result,
+        "ngram_entropy": ngram_result,
+        "digitsOrSymbols": name_has_digit_or_symbols
     }
