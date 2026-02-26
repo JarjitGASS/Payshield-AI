@@ -45,10 +45,6 @@ async def check_id_card(file, nik: str, fullname: str, pob: str, dob: str, gende
   input_dob = dob.strip()
   input_gender = gender.strip().upper()
 
-  for field in ["name", "place_of_birth", "date_of_birth", "gender"]:
-    if not qwen.get(field):
-      raise HTTPException(status_code=400, detail=f"MISSING_{field.upper()}")
-
   try:
     dob_obj = datetime.strptime(input_dob, "%Y-%m-%d")
     input_dob = dob_obj.strftime("%d-%m-%Y")
@@ -61,6 +57,10 @@ async def check_id_card(file, nik: str, fullname: str, pob: str, dob: str, gende
     qwen = json.loads(result)
   except json.JSONDecodeError:
     raise HTTPException(status_code=400, detail="INVALID_QWEN_JSON")
+  
+  for field in ["name", "place_of_birth", "date_of_birth", "gender"]:
+    if not qwen.get(field):
+      raise HTTPException(status_code=400, detail=f"MISSING_{field.upper()}")
 
   qwen_name = qwen["name"].strip().upper()
   qwen_pob = qwen["place_of_birth"].strip().upper()

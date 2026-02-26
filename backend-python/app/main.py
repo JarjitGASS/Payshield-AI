@@ -4,7 +4,6 @@ import json
 import os
 from dotenv import load_dotenv
 from services.check_id_card import check_id_card
-from datetime import datetime
 
 load_dotenv()
 
