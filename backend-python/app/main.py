@@ -5,6 +5,7 @@ import os
 from dotenv import load_dotenv
 from services.check_id_card import check_id_card
 from services.verivfy_id_card import verify_id_card
+from services.verify_email_age_card import verify_email_age
 
 load_dotenv()
 
@@ -35,9 +36,14 @@ async def register(
     dob: str = Form(...),
     gender: str = Form(...),
     file: UploadFile = File(...)
+    # blm ada email
 ):
     return await check_id_card(file, nik, fullname, pob, dob, gender)
 
 @app.post("/verify-id-card")
 async def verify_id_card_endpoint(file: UploadFile = File(...)):
     return await verify_id_card(file)
+
+@app.post("/verify-email-age")
+async def verify_email_age_endpoint(email: str = Form()):
+    return await verify_email_age(email)
