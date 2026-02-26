@@ -3,6 +3,7 @@ import { useState } from "react";
 export default function RegisterPage() {
   const [isError, setIsError] = useState<boolean | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -10,17 +11,24 @@ export default function RegisterPage() {
 
     const formData = new FormData(form);
 
-
     try {
-      const response = await fetch('http://localhost:3000/auth/register', {
+      const response = await fetch('http://localhost:8000/register', {
         method: 'POST',
         body: formData,
       });
 
       const result = await response.json();
+
+      if (!response.ok) {
+        setIsError(true);
+        setMessage(result.detail.message || "Registration failed");
+        setAnalysis(result.detail.analysis || null);
+        return;
+      }
+
       setIsError(!result.success);
       setMessage(result.message);
-
+      setAnalysis(result.analysis || null);
     } catch (err) {
       console.error("Registration error:", err);
       setIsError(true);
@@ -34,6 +42,11 @@ export default function RegisterPage() {
         <h1 className="text-3xl font-bold text-center text-gray-800 mb-8">Register</h1>
         
         <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="flex flex-col">
+            <label className="text-sm font-semibold text-gray-600 mb-1">NIK</label>
+            <input name="nik" type="text" required className="input-style text-black" placeholder="1234567890123456" />
+          </div>
+
           <div className="flex flex-col">
             <label className="text-sm font-semibold text-gray-600 mb-1">Nama Lengkap</label>
             <input name="fullname" type="text" required className="input-style text-black" placeholder="John Doe" />
@@ -54,15 +67,15 @@ export default function RegisterPage() {
             <label className="text-sm font-semibold text-gray-600 mb-1">Jenis Kelamin</label>
             <select name="gender" required className="input-style bg-white text-black">
               <option value="">Pilih...</option>
-              <option value="Laki-laki text-black">Laki-laki</option>
-              <option value="Perempuan text-black">Perempuan</option>
+              <option value="Laki-laki">Laki-laki</option>
+              <option value="Perempuan">Perempuan</option>
             </select>
           </div>
 
           <div className="flex flex-col">
             <label className="text-sm font-semibold text-gray-600 mb-1">Foto ID Card (KTP/Passport)</label>
             <input 
-              name="idCard" 
+              name="file" 
               type="file" 
               accept="image/*" 
               required 
@@ -78,6 +91,12 @@ export default function RegisterPage() {
         {isError !== null && (
           <div className={`mt-6 p-4 rounded-lg text-center ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
             {message}
+            {analysis && (
+              <div className="mt-2 text-sm">
+                <p className="font-semibold">Analysis:</p> 
+                <pre>{JSON.stringify(analysis, null, 2)}</pre>
+              </div>
+            )}
           </div>
         )}
       </div>
