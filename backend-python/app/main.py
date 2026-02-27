@@ -1,7 +1,7 @@
 from webbrowser import get
 
 import database.redis_client
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import os
@@ -21,6 +21,8 @@ from database.database import SessionLocal
 import model, database.database
 from services.network_fraud import evaluate_network_fraud_service
 from datetime import datetime, timedelta, timezone
+import secrets, time
+
 
 load_dotenv()
 database.database.Base.metadata.create_all(bind=database.database.engine)
@@ -55,6 +57,27 @@ def get_db():
 @app.get("/")
 def health_check():
     return {"status": "ok"}
+
+@app.get("/csrf")
+def issue_csrf(response: Response):
+    os.getenv("SECRET_KEY")
+    token = secrets.token_hex(32)
+    issued_at = str(int(time.time()))
+
+    response.set_cookie(
+        key="csrf_token",
+        value=token,
+        httponly=True,
+        samesite="strict"
+    )
+    response.set_cookie(
+        key="csrf_issued_at",
+        value=issued_at,
+        httponly=True,
+        samesite="strict"
+    )
+
+    return {"csrfToken": token}
 
 @app.post("/auth/login")
 async def login(body: LoginRequest) -> LoginResponse:
