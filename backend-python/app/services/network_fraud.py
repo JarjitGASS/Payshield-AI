@@ -5,7 +5,6 @@ from services.verify_geoip import get_real_ip
 from agents.synthetic_network_agent import run_network_agent
 
 def get_network_signals(client_ip: str, device_id: str, login_history: list) -> NetworkInput:
-    """Fungsi pembantu (Private) untuk menghitung IP dan Device"""
     WINDOW_MIN = 30
     time_limit = datetime.now() - timedelta(minutes=WINDOW_MIN)
     
