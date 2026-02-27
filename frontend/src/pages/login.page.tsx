@@ -1,7 +1,9 @@
 import { useState } from "react";
 import useBehavioralMonitor from "../hooks/useBehavioralMonitor.hook";
+import useGetXsrfToken from "../hooks/useGetXsrfToken.hook";
 
 export default function LoginPage() {
+  useGetXsrfToken();
   const { flush } = useBehavioralMonitor();
   const [isError, setIsError] = useState<boolean | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -25,9 +27,13 @@ export default function LoginPage() {
     };
 
     try {
-      const response = await fetch('http://localhost:8000/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("http://localhost:8000/auth/login", {
+        method: "POST",
+        credentials: "include", 
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": (window as any).csrfToken,
+        },
         body: JSON.stringify(payload),
       });
       const result = await response.json();

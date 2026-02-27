@@ -1,7 +1,7 @@
 from webbrowser import get
 
 import database.redis_client
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, APIRouter, Response
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, APIRouter, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import os
@@ -25,7 +25,7 @@ from services.network_fraud import evaluate_network_fraud_service
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 import secrets, time
-from middleware.middleware import BotProtectionMiddleware
+from middleware.middleware import bot_protect
 
 
 load_dotenv()
@@ -51,8 +51,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.add_middleware(BotProtectionMiddleware)
-
 @app.get("/")
 def health_check():
     return {"status": "ok"}
@@ -67,7 +65,7 @@ def issue_csrf(response: Response):
         key="csrf_token",
         value=token,
         httponly=True,
-        samesite="strict"
+        samesite="lax"  
     )
     response.set_cookie(
         key="csrf_issued_at",
@@ -78,7 +76,7 @@ def issue_csrf(response: Response):
 
     return {"csrfToken": token}
 
-@app.post("/auth/login")
+@app.post("/auth/login", dependencies=[Depends(bot_protect)])
 async def login(body: LoginRequest) -> LoginResponse:
     return await login_service(body)
 

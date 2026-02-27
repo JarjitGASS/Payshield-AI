@@ -1,30 +1,21 @@
-from fastapi import Request, HTTPException
-from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi import Request, HTTPException, Depends
 import time
 
 MIN_FORM_TIME = 2  # seconds
 
-class BotProtectionMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        if request.method == "POST":
-            # --- CSRF token ---
-            csrf_cookie = request.cookies.get("csrf_token")
-            csrf_header = request.headers.get("X-CSRF-Token")
+async def bot_protect(request: Request):
+    if request.method != "POST":
+        return
 
-            if not csrf_cookie or csrf_cookie != csrf_header:
-                raise HTTPException(403, "Invalid CSRF token")
+    csrf_cookie = request.cookies.get("csrf_token")
+    csrf_header = request.headers.get("X-CSRF-Token")
 
-            # --- Token issued time ---
-            issued_at = request.cookies.get("csrf_issued_at")
-            if not issued_at:
-                raise HTTPException(403, "Missing token timestamp")
+    if not csrf_cookie or csrf_cookie != csrf_header:
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
 
-            if int(time.time()) - int(issued_at) < MIN_FORM_TIME:
-                raise HTTPException(403, "Form submitted too quickly")
+    issued_at = request.cookies.get("csrf_issued_at")
+    if not issued_at:
+        raise HTTPException(status_code=403, detail="Missing CSRF timestamp")
 
-            # --- Honeypot ---
-            body = await request.json()
-            if body.get("company_website"):
-                raise HTTPException(403, "Bot detected")
-
-        return await call_next(request)
+    if int(time.time()) - int(issued_at) < MIN_FORM_TIME:
+        raise HTTPException(status_code=403, detail="Form submitted too quickly")
