@@ -2,15 +2,19 @@ import json
 from qwen.qwen import qwen_chat
 from dtos.auth_input import LoginRequest
 from dtos.auth_result import LoginResponse, BehaviorAnalysis
+from database.database import SessionLocal
+from model.model import User
+from argon2 import PasswordHasher
 
 
 async def login_service(body: LoginRequest) -> LoginResponse:
     try:
-        # Validate credentials
-        if body.username != "admin" or body.password != "password":
+        db = SessionLocal()
+        user = db.query(User).filter(User.username == body.username).first()
+        if not user:
             return LoginResponse(
-                success=False,
-                message="Invalid credentials"
+            success=False,
+            message="Invalid credentials"
             )
 
         # Create prompt for behavioral analysis

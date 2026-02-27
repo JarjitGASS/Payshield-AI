@@ -37,7 +37,7 @@ export default function LoginPage() {
         body: JSON.stringify(payload),
       });
       const result = await response.json();
-
+      console.log(result);
       setIsError(!result.success);
       setMessage(result.message);
       setResult(result.analysis || null);
