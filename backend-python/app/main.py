@@ -25,6 +25,7 @@ from services.network_fraud import evaluate_network_fraud_service
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 import secrets, time
+from middleware.middleware import BotProtectionMiddleware
 
 
 load_dotenv()
@@ -50,12 +51,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+app.add_middleware(BotProtectionMiddleware)
 
 @app.get("/")
 def health_check():
