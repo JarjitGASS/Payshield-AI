@@ -4,10 +4,6 @@ from enum import Enum
 
 
 class SessionStatus(str, Enum):
-    """
-    STATE SYSTEM — tracks the lifecycle of a risk assessment session.
-    Transitions: PENDING → PREPROCESSING → AGENT_RUNNING → ORCHESTRATING → GUARDRAIL_CHECK → COMPLETE | REVIEW | ERROR
-    """
     PENDING = "PENDING"                   # Session created, not yet started
     PREPROCESSING = "PREPROCESSING"       # Tools running (OCR, face match, entropy)
     AGENT_RUNNING = "AGENT_RUNNING"       # Individual agents executing
