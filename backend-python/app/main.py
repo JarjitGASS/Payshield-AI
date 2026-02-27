@@ -11,7 +11,7 @@ from services.verify_geoip import check_geo_ip, get_real_ip
 from services.sentiment_entity import analyze_company_sentiment
 from services.auth_service import login_service
 from services.shared_ip_device import analyze_fraud
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from model.auth_input import LoginRequest
 from model.auth_result import LoginResponse
 
@@ -102,13 +102,20 @@ async def verify_fraud_activity_endpoint(
 ):
     ip = get_real_ip(request)
 
+    now = datetime.now(timezone.utc)
+    window_keep = timedelta(seconds=int(os.getenv("FRAUD_WINDOW_SECONDS", "120")))
+    login_history[:] = [
+        e for e in login_history
+        if (e["timestamp"].replace(tzinfo=timezone.utc) if e["timestamp"].tzinfo is None else e["timestamp"]) >= now - window_keep
+    ]
+
     result = analyze_fraud(user_id, device_id, ip, login_history)
 
     login_history.append({
         "user_id": user_id,
         "ip": ip,
         "device_id": device_id,
-        "timestamp": datetime.now()
+        "timestamp": now
     })
 
     return {

@@ -1,39 +1,64 @@
-from datetime import datetime, timedelta
+import os
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
-def analyze_fraud(user_id: str, device_id: str, client_ip: str, login_history: list):
-    IP_THRESHOLD = 10
-    DEVICE_THRESHOLD = 3
-    WINDOW_MIN = 10
+WINDOW_SECONDS = int(os.getenv("FRAUD_WINDOW_SECONDS", "120"))
+IP_UNIQUE_USERS_THRESHOLD = int(os.getenv("FRAUD_IP_UNIQUE_USERS_THRESHOLD", "10"))
+DEVICE_UNIQUE_USERS_THRESHOLD = int(os.getenv("FRAUD_DEVICE_UNIQUE_USERS_THRESHOLD", "3"))
 
-    time_limit = datetime.now() - timedelta(minutes=WINDOW_MIN)
-    
-    recent_ip_logs = [log for log in login_history if log["ip"] == client_ip and log["timestamp"] > time_limit]
-    unique_users_ip = {log["user_id"] for log in recent_ip_logs}
-    ip_count = len(unique_users_ip)
-    
-    recent_dev_logs = [log for log in login_history if log["device_id"] == device_id and log["timestamp"] > time_limit]
-    unique_users_dev = {log["user_id"] for log in recent_dev_logs}
-    dev_count = len(unique_users_dev)
+def _to_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
-    verdict = "CLEAN"
+def analyze_fraud(user_id: str, device_id: str, ip: str, login_history: list[dict[str, Any]]) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(seconds=WINDOW_SECONDS)
+
+    recent = [e for e in login_history if _to_utc(e["timestamp"]) >= window_start]
+
+    current_event = {
+        "user_id": user_id,
+        "device_id": device_id,
+        "ip": ip,
+        "timestamp": now,
+    }
+    recent_with_current = recent + [current_event]
+
+    ip_unique_users = {e["user_id"] for e in recent_with_current if e["ip"] == ip}
+    device_unique_users = {e["user_id"] for e in recent_with_current if e["device_id"] == device_id}
+
+    flags: list[str] = []
     score = 0
-    reasons = []
 
-    if ip_count >= IP_THRESHOLD:
-        verdict = "BANNED"
-        score = 100
-        reasons.append(f"Detected Bot Farm: {ip_count} users on same IP")
-    elif dev_count >= DEVICE_THRESHOLD:
-        verdict = "FLAGGED"
-        score = 75
-        reasons.append(f"High Device Sharing: {dev_count} users on same device")
+    if len(ip_unique_users) >= IP_UNIQUE_USERS_THRESHOLD:
+        flags.append("IP_SHARED_BURST")
+        score += 70
+
+    if len(device_unique_users) >= DEVICE_UNIQUE_USERS_THRESHOLD:
+        flags.append("DEVICE_SHARED_BURST")
+        score += 50
+
+    if score >= 70:
+        level = "high"
+        action = "block"
+    elif score >= 40:
+        level = "medium"
+        action = "step_up"
+    else:
+        level = "low"
+        action = "allow"
 
     return {
-        "verdict": verdict,
-        "fraud_score": score,
-        "reasons": reasons,
-        "detail": {
-            "ip_users_count": ip_count,
-            "device_users_count": dev_count
-        }
+        "risk_score": score,
+        "risk_level": level,
+        "recommended_action": action,
+        "flags": flags,
+        "metrics": {
+            "window_seconds": WINDOW_SECONDS,
+            "ip_unique_users_count": len(ip_unique_users),
+            "device_unique_users_count": len(device_unique_users),
+            "ip_threshold": IP_UNIQUE_USERS_THRESHOLD,
+            "device_threshold": DEVICE_UNIQUE_USERS_THRESHOLD,
+        },
     }
