@@ -10,7 +10,7 @@ from services.name_entropy import shannon_entropy, has_digits_or_symbols, ngram_
 from services.verify_geoip import check_geo_ip, get_real_ip
 from services.sentiment_entity import analyze_company_sentiment
 from services.auth_service import login_service
-from services.shared_ip_device import analyze_fraud
+from services.network_fraud import get_network_signals, evaluate_network_fraud_service
 from datetime import datetime, timedelta, timezone
 from model.auth_input import LoginRequest
 from model.auth_result import LoginResponse
@@ -18,6 +18,9 @@ from model.auth_result import LoginResponse
 load_dotenv()
 
 app = FastAPI()
+
+# db sementara buat simpen data login
+login_history = []
 
 origins = [
     "http://localhost:5173",
@@ -92,34 +95,15 @@ async def sentiment_entity_analysis(
 
     return result
 
-login_history = []
-
 @app.post("/verify-fraud-activity")
 async def verify_fraud_activity_endpoint(
     request: Request,
     user_id: str = Form(...),
     device_id: str = Form(...)
 ):
-    ip = get_real_ip(request)
-
-    now = datetime.now(timezone.utc)
-    window_keep = timedelta(seconds=int(os.getenv("FRAUD_WINDOW_SECONDS", "120")))
-    login_history[:] = [
-        e for e in login_history
-        if (e["timestamp"].replace(tzinfo=timezone.utc) if e["timestamp"].tzinfo is None else e["timestamp"]) >= now - window_keep
-    ]
-
-    result = analyze_fraud(user_id, device_id, ip, login_history)
-
-    login_history.append({
-        "user_id": user_id,
-        "ip": ip,
-        "device_id": device_id,
-        "timestamp": now
-    })
-
-    return {
-        "status": 200,
-        "ip_address": ip,
-        **result
-    }
+    return await evaluate_network_fraud_service(
+        request=request,
+        user_id=user_id,
+        device_id=device_id,
+        login_history=login_history
+    )

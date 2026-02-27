@@ -1,6 +1,6 @@
 import json
 from model.agent_result import AgentResult
-from model.input_schema import NetworkInput
+from model.network_input import NetworkInput
 from qwen.qwen import qwen_chat
 
 SYSTEM_PROMPT = """
