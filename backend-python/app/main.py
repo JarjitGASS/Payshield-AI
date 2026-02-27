@@ -1,7 +1,11 @@
+from webbrowser import get
+
+import database.redis_client
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import os
+import model.model
 from dotenv import load_dotenv
 from services.check_id_card import check_id_card
 from services.verivfy_id_card import verify_id_card
@@ -10,10 +14,13 @@ from services.name_entropy import shannon_entropy, has_digits_or_symbols, ngram_
 from services.verify_geoip import check_geo_ip, get_real_ip
 from services.sentiment_entity import analyze_company_sentiment
 from services.auth_service import login_service
-from model.auth_input import LoginRequest
-from model.auth_result import LoginResponse
+from dtos.auth_input import LoginRequest
+from dtos.auth_result import LoginResponse
+from database.database import SessionLocal
+import model, database.database
 
 load_dotenv()
+database.database.Base.metadata.create_all(bind=database.database.engine)
 
 app = FastAPI()
 
@@ -29,6 +36,13 @@ app.add_middleware(
     allow_methods=["*"],               
     allow_headers=["*"],
 )
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 @app.get("/")
 def health_check():
