@@ -12,7 +12,8 @@ from services.verify_geoip import get_ip_geo_ipinfo, get_ip_geo_ipapi, is_privat
 from services.verify_email_age_card import check_email_age
 from services.sentiment_entity import analyze_company_sentiment
 from services.check_id_card import check_id_card
-from services.network_fraud import get_network_signals
+from services.network_signal import get_network_signals
+
 from services.rag_service import (
     fetch_agent_history,
     fetch_orchestrator_history,
