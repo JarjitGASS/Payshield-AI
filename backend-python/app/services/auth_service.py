@@ -1,7 +1,7 @@
 import json
 from qwen.qwen import qwen_chat
-from model.auth_input import LoginRequest
-from model.auth_result import LoginResponse, BehaviorAnalysis
+from dtos.auth_input import LoginRequest
+from dtos.auth_result import LoginResponse, BehaviorAnalysis
 
 
 async def login_service(body: LoginRequest) -> LoginResponse:
