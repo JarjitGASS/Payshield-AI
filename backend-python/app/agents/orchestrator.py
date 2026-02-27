@@ -1,14 +1,23 @@
+"""
+Meta-Agent Orchestrator — fully autonomous with:
+  1. Corrective error feedback between retries
+  2. RAG context from historical orchestrator decisions
+  3. Similar-flags RAG: fetch past cases with overlapping flags
+  4. Full inter-agent communication via SessionState
+  5. Adaptive threshold awareness for decision calibration
+"""
 import json
-from model.agent_result import AgentResult
-from model.meta_agent_result import MetaAgentResult
-from model.session_state import SessionState, SessionStatus
+from dtos.agent_result import AgentResult
+from dtos.meta_agent_result import MetaAgentResult
+from dtos.session_state import SessionState, SessionStatus
 from qwen.qwen import qwen_chat
+from services.rag_service import (
+    fetch_orchestrator_history,
+    fetch_similar_flags_history,
+    store_orchestrator_result,
+)
+from services.adaptive_threshold import get_adaptive_thresholds
 
-# ─────────────────────────────────────────────────────────────
-# GOAL: Consolidate all agent outputs and autonomously produce
-#       a final risk decision (APPROVE / REVIEW / REJECT).
-#       Human intervention is only triggered on REVIEW.
-# ─────────────────────────────────────────────────────────────
 AGENT_GOAL = (
     "Consolidate identity, behavioral, and network agent outputs "
     "and autonomously produce a final, evidence-based risk decision. "
@@ -16,9 +25,17 @@ AGENT_GOAL = (
 )
 
 AGENT_STEP = "meta_agent_orchestrator"
-MAX_RETRIES = 2
+MAX_RETRIES = 3
 
-SYSTEM_PROMPT = f"""
+
+def _build_system_prompt(thresholds: dict) -> str:
+    """Build system prompt with adaptive thresholds injected."""
+    at = thresholds.get("approve_threshold", 0.3)
+    rt = thresholds.get("reject_threshold", 0.7)
+    mc = thresholds.get("min_confidence", 0.5)
+    src = thresholds.get("source", "defaults")
+
+    return f"""
 You are a Meta-Agent Risk Orchestrator for a payment fraud detection system.
 YOUR GOAL: {AGENT_GOAL}
 
@@ -28,10 +45,10 @@ RULES:
 - Do not invent data. Return valid JSON only.
 - You have full decision-making autonomy. Produce a final decision.
 
-DECISION GUIDE (deterministic thresholds for your reference):
-- overall_risk < 0.3  AND confidence >= 0.5 → APPROVE
-- overall_risk 0.3-0.7 OR confidence < 0.5  → REVIEW
-- overall_risk > 0.7  AND confidence >= 0.5 → REJECT
+DECISION GUIDE (thresholds — source: {src}):
+- overall_risk < {at}  AND confidence >= {mc} → APPROVE
+- overall_risk {at}-{rt} OR confidence < {mc}  → REVIEW
+- overall_risk > {rt}  AND confidence >= {mc} → REJECT
 
 AGENT WEIGHTS (use these to compute overall_risk):
 - Identity risk:   45%
@@ -41,7 +58,7 @@ AGENT WEIGHTS (use these to compute overall_risk):
 NOTE: If any agent has AGENT_FAILURE flag, escalate to REVIEW regardless of other scores.
 
 OUTPUT FORMAT (strict JSON, no extra text):
-{{
+{{{{
   "identity_risk": <float 0.0-1.0>,
   "behavior_risk": <float 0.0-1.0>,
   "network_risk": <float 0.0-1.0>,
@@ -50,15 +67,94 @@ OUTPUT FORMAT (strict JSON, no extra text):
   "confidence": <float 0.0-1.0>,
   "explanation": "<2-3 sentence consolidated reasoning referencing all agent outputs>",
   "flags": [<all triggered flags combined from all agents>]
-}}
+}}}}
 """
+
+
+def _build_rag_context(all_flags: list) -> str:
+    """Fetch historical orchestrator decisions and similar-flag cases (RAG)."""
+    parts = []
+
+    # Recent orchestrator decisions — returns a formatted string directly
+    orch_history = fetch_orchestrator_history(limit=5)
+    if orch_history:
+        parts.append("\n--- HISTORICAL ORCHESTRATOR DECISIONS (RAG) ---")
+        parts.append(orch_history)
+        parts.append("Use these as calibration anchors for decision consistency.\n")
+
+    # Cases with similar flags — also returns a formatted string
+    if all_flags:
+        similar = fetch_similar_flags_history(flags=all_flags, limit=3)
+        if similar:
+            parts.append("\n--- SIMILAR FLAG CASES (RAG) ---")
+            parts.append(similar)
+            parts.append(
+                "These past cases had overlapping flags — ensure decision consistency.\n"
+            )
+
+    return "\n".join(parts)
+
+
+def _build_inter_agent_context(state: SessionState) -> str:
+    """
+    INTER-AGENT COMMUNICATION:
+    Provide the orchestrator with the full inter-agent communication
+    picture — every agent's result, all accumulated flags, errors, and
+    cross-agent correlation signals.
+    """
+    parts = []
+
+    risks = {}
+    if state.identity_result:
+        risks["identity"] = state.identity_result.get("risk", 0.5)
+    if state.behavioral_result:
+        risks["behavioral"] = state.behavioral_result.get("risk", 0.5)
+    if state.network_result:
+        risks["network"] = state.network_result.get("risk", 0.5)
+
+    if len(risks) >= 2:
+        high_risk_agents = [k for k, v in risks.items() if v > 0.6]
+        if len(high_risk_agents) >= 2:
+            parts.append(
+                f"\n--- CROSS-AGENT CORRELATION ---\n"
+                f"  ⚠ Multiple agents report elevated risk: {high_risk_agents}\n"
+                f"  This cross-agent agreement significantly increases confidence "
+                f"in a REJECT decision.\n"
+            )
+
+        low_risk_agents = [k for k, v in risks.items() if v < 0.3]
+        high_risk = [k for k, v in risks.items() if v > 0.6]
+        if low_risk_agents and high_risk:
+            parts.append(
+                f"\n--- CROSS-AGENT CONFLICT ---\n"
+                f"  ⚠ Conflicting signals: {low_risk_agents} report low risk while "
+                f"{high_risk} report high risk.\n"
+                f"  Resolve carefully — conflicting signals typically warrant REVIEW.\n"
+            )
+
+    if state.errors:
+        parts.append(f"\n--- SESSION ERRORS ---\n  {state.errors}")
+
+    if state.retry_count > 0:
+        parts.append(
+            f"\n--- SESSION RETRIES ---\n"
+            f"  Total retries across all agents: {state.retry_count}\n"
+            f"  High retry count may indicate ambiguous input data.\n"
+        )
+
+    return "\n".join(parts)
 
 
 def _build_user_prompt(
     identity: AgentResult,
     behavioral: AgentResult,
     network: AgentResult,
+    state: SessionState,
 ) -> str:
+    all_flags = identity.flags + behavioral.flags + network.flags
+    rag_ctx = _build_rag_context(all_flags)
+    inter_agent_ctx = _build_inter_agent_context(state)
+
     return f"""
 Consolidate these 3 agent outputs into a final autonomous risk decision:
 
@@ -79,8 +175,34 @@ NETWORK AGENT (weight: 30%):
 - flags: {network.flags}
 - explanation: {network.explanation}
 - confidence: {network.confidence}
+{rag_ctx}{inter_agent_ctx}
 
 Return the consolidated JSON decision only.
+"""
+
+
+def _build_corrective_prompt(
+    identity: AgentResult,
+    behavioral: AgentResult,
+    network: AgentResult,
+    state: SessionState,
+    last_error: str,
+    attempt: int,
+) -> str:
+    """Build a retry prompt injecting the specific error from the previous attempt."""
+    base = _build_user_prompt(identity, behavioral, network, state)
+    return f"""{base}
+
+--- CORRECTIVE FEEDBACK (attempt {attempt}) ---
+Your previous output was INVALID. The error was:
+  \"{last_error}\"
+
+FIX INSTRUCTIONS:
+- Ensure your response is ONLY valid JSON (no markdown, no extra text).
+- All risk/confidence fields must be floats between 0.0 and 1.0.
+- decision must be exactly "APPROVE", "REVIEW", or "REJECT".
+- flags must be a JSON array of strings.
+Return corrected JSON only.
 """
 
 
@@ -92,16 +214,18 @@ def run_orchestrator(
 ) -> MetaAgentResult:
     """
     DECISION MAKING AUTONOMY + REASON-ACT LOOP:
-    1. REASON: Consolidate all 3 agent outputs into a single prompt.
+    1. REASON: Consolidate all 3 agent outputs + RAG + inter-agent context.
     2. ACT:    Call Qwen to produce autonomous final decision.
     3. VALIDATE: Parse and validate the meta-agent output.
-    4. RETRY:  If output is invalid, retry up to MAX_RETRIES times.
-    5. FALLBACK: If all retries fail, escalate entire session to REVIEW.
-
-    The orchestrator has full decision-making autonomy.
-    Human intervention is only triggered if decision = REVIEW.
+    4. CORRECT: If output invalid, inject corrective feedback and retry.
+    5. STORE:  Persist result to RAG history for future sessions.
+    6. FALLBACK: If all retries fail, escalate entire session to REVIEW.
     """
     state.transition(SessionStatus.ORCHESTRATING, step=f"Running {AGENT_STEP}")
+
+    # ── Fetch adaptive thresholds ───────────────────────────
+    thresholds = get_adaptive_thresholds()
+    system_prompt = _build_system_prompt(thresholds)
 
     # If any agent has AGENT_FAILURE, force REVIEW before even calling LLM
     all_flags = identity.flags + behavioral.flags + network.flags
@@ -120,13 +244,35 @@ def run_orchestrator(
         state.final_decision = "REVIEW"
         state.final_overall_risk = 0.5
         state.transition(SessionStatus.REVIEW, step="Escalated due to AGENT_FAILURE")
+
+        # Store even failure cases for RAG learning
+        store_orchestrator_result(
+            session_id=state.session_id,
+            identity_risk=fallback.identity_risk,
+            behavior_risk=fallback.behavior_risk,
+            network_risk=fallback.network_risk,
+            overall_risk=fallback.overall_risk,
+            decision=fallback.decision,
+            confidence=fallback.confidence,
+            explanation=fallback.explanation,
+            flags=fallback.flags,
+        )
         return fallback
 
-    user_prompt = _build_user_prompt(identity, behavioral, network)
+    user_prompt = _build_user_prompt(identity, behavioral, network, state)
+    last_error = None
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            raw = qwen_chat(SYSTEM_PROMPT, user_prompt)
+            # On retry, inject corrective feedback
+            prompt = (
+                _build_corrective_prompt(
+                    identity, behavioral, network, state, last_error, attempt
+                )
+                if last_error else user_prompt
+            )
+
+            raw = qwen_chat(system_prompt, prompt)
             data = json.loads(raw)
 
             result = MetaAgentResult(**data)
@@ -141,6 +287,19 @@ def run_orchestrator(
             if result.decision not in ["APPROVE", "REVIEW", "REJECT"]:
                 raise ValueError(f"Invalid decision: {result.decision}")
 
+            # ── STORE: Persist to RAG history ───────────────
+            store_orchestrator_result(
+                session_id=state.session_id,
+                identity_risk=result.identity_risk,
+                behavior_risk=result.behavior_risk,
+                network_risk=result.network_risk,
+                overall_risk=result.overall_risk,
+                decision=result.decision,
+                confidence=result.confidence,
+                explanation=result.explanation,
+                flags=result.flags,
+            )
+
             # Store result in session state
             state.meta_result = result.model_dump()
             state.final_decision = result.decision
@@ -149,10 +308,11 @@ def run_orchestrator(
             return result
 
         except (json.JSONDecodeError, ValueError, TypeError) as e:
+            last_error = str(e)
             state.retry_count += 1
             error_msg = f"{AGENT_STEP} attempt {attempt} failed: {e}"
             state.errors.append(error_msg)
-            print(f"[ReasonActLoop] {error_msg}. Retrying...")
+            print(f"[ReasonActLoop] {error_msg}. Injecting corrective feedback...")
 
     # All retries exhausted — safe fallback to REVIEW
     fallback = MetaAgentResult(
@@ -170,4 +330,17 @@ def run_orchestrator(
     state.final_overall_risk = 0.5
     state.merge_flags(fallback.flags)
     state.transition(SessionStatus.REVIEW, step="Orchestrator failed, escalated to REVIEW")
+
+    # Store failure for RAG learning
+    store_orchestrator_result(
+        session_id=state.session_id,
+        identity_risk=fallback.identity_risk,
+        behavior_risk=fallback.behavior_risk,
+        network_risk=fallback.network_risk,
+        overall_risk=fallback.overall_risk,
+        decision=fallback.decision,
+        confidence=fallback.confidence,
+        explanation=fallback.explanation,
+        flags=fallback.flags,
+    )
     return fallback
