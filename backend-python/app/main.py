@@ -15,7 +15,7 @@ from services.verify_geoip import check_geo_ip, get_real_ip
 from services.sentiment_entity import analyze_company_sentiment
 from services.auth_service import login_service
 from services.navigation_consistency_score import store_click_position
-from services.login_hour_service import login_hour_service
+from services.login_hour import login_hour_service
 from database.redis_client import redis_client
 from dtos.auth_input import LoginRequest
 from dtos.auth_result import LoginResponse
