@@ -10,6 +10,8 @@ from services.name_entropy import shannon_entropy, has_digits_or_symbols, ngram_
 from services.verify_geoip import check_geo_ip, get_real_ip
 from services.sentiment_entity import analyze_company_sentiment
 from services.auth_service import login_service
+from services.shared_ip_device import analyze_fraud
+from datetime import datetime
 from model.auth_input import LoginRequest
 from model.auth_result import LoginResponse
 
@@ -89,3 +91,28 @@ async def sentiment_entity_analysis(
     result = await analyze_company_sentiment(company_name)
 
     return result
+
+login_history = []
+
+@app.post("/verify-fraud-activity")
+async def verify_fraud_activity_endpoint(
+    request: Request,
+    user_id: str = Form(...),
+    device_id: str = Form(...)
+):
+    ip = get_real_ip(request)
+
+    result = analyze_fraud(user_id, device_id, ip, login_history)
+
+    login_history.append({
+        "user_id": user_id,
+        "ip": ip,
+        "device_id": device_id,
+        "timestamp": datetime.now()
+    })
+
+    return {
+        "status": 200,
+        "ip_address": ip,
+        **result
+    }
