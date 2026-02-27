@@ -8,10 +8,11 @@ as part of their reasoning loop (Action Capability).
 from typing import Callable, Dict, Any, Optional
 from services.name_entropy import shannon_entropy, ngram_entropy, has_digits_or_symbols
 from services.navigation_consistency_score import click_entropy, navigation_consistency_score
-from services.verify_geoip import get_ip_geo_ipinfo, get_ip_geo_ipapi
+from services.verify_geoip import get_ip_geo_ipinfo, get_ip_geo_ipapi, is_private_ip
 from services.verify_email_age_card import check_email_age
 from services.sentiment_entity import analyze_company_sentiment
 from services.check_id_card import check_id_card
+from services.network_fraud import get_network_signals
 from services.rag_service import (
     fetch_agent_history,
     fetch_orchestrator_history,
@@ -78,6 +79,28 @@ TOOL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "fn": navigation_consistency_score,
         "description": "Get navigation consistency score for a user from Redis.",
         "agent": "behavioral_agent",
+    },
+
+    # ── Network Fraud Tools ─────────────────────────────────
+    "get_network_signals": {
+        "fn": get_network_signals,
+        "description": "Get network fraud signals (shared device/IP counts) from login history.",
+        "agent": "synthetic_network_agent",
+    },
+    "get_ip_geo_ipinfo": {
+        "fn": get_ip_geo_ipinfo,
+        "description": "Get geolocation data for an IP address using ipinfo.io.",
+        "agent": "synthetic_network_agent",
+    },
+    "get_ip_geo_ipapi": {
+        "fn": get_ip_geo_ipapi,
+        "description": "Get geolocation data for an IP address using ip-api.com.",
+        "agent": "synthetic_network_agent",
+    },
+    "is_private_ip": {
+        "fn": is_private_ip,
+        "description": "Check if an IP address is private/internal. Returns bool.",
+        "agent": "synthetic_network_agent",
     },
 
     # ── RAG Tools ───────────────────────────────────────────
