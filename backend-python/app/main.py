@@ -1,7 +1,7 @@
 from webbrowser import get
 
 import database.redis_client
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Response
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, APIRouter, Response
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import os
@@ -15,12 +15,15 @@ from services.verify_geoip import check_geo_ip, get_real_ip
 from services.sentiment_entity import analyze_company_sentiment
 from services.auth_service import login_service
 from services.navigation_consistency_score import store_click_position
+from services.login_hour_service import login_hour_service
+from database.redis_client import redis_client
 from dtos.auth_input import LoginRequest
 from dtos.auth_result import LoginResponse
 from database.database import SessionLocal
 import model, database.database
 from services.network_fraud import evaluate_network_fraud_service
 from datetime import datetime, timedelta, timezone
+from pydantic import BaseModel
 import secrets, time
 
 
@@ -159,3 +162,12 @@ async def verify_network_fraud_endpoint(
         device_id=device_id,
         login_history=login_history
     )
+
+router = APIRouter()
+class LoginHourRequest(BaseModel):
+    user_id: str
+    hours: list[int] = [] 
+
+@router.post("/check-login-hour")
+async def login_hour_endpoint(user_id: str):
+    return await login_hour_service(user_id, redis_client)
