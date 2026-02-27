@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 import uuid
 
 from services.verify_geoip import get_real_ip
-from agents.synthetic_network_agent import run_network_agent
 from dtos.network_input import NetworkInput
 from dtos.session_state import SessionState, SessionStatus
 
@@ -47,6 +46,8 @@ async def evaluate_network_fraud_service(
         status=SessionStatus.PENDING,
         current_step="Initializing network agent"
     )
+
+    from agents.synthetic_network_agent import run_network_agent
 
     agent_result = run_network_agent(features=signals, state=state)
 
