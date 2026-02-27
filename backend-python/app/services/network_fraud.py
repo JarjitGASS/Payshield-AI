@@ -44,13 +44,8 @@ async def evaluate_network_fraud_service(
     
     state = SessionState(
         session_id=current_session_id,
-        user_id=user_id,
-        status=SessionStatus.INITIALIZED,
-        identity_result=None,
-        behavioral_result=None,
-        flags=[],
-        errors=[],
-        retry_count=0
+        status=SessionStatus.PENDING,
+        current_step="Initializing network agent"
     )
 
     agent_result = run_network_agent(features=signals, state=state)
