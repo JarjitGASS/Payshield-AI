@@ -19,11 +19,16 @@ from dtos.auth_input import LoginRequest
 from dtos.auth_result import LoginResponse
 from database.database import SessionLocal
 import model, database.database
+from services.network_fraud import evaluate_network_fraud_service
+from datetime import datetime, timedelta, timezone
 
 load_dotenv()
 database.database.Base.metadata.create_all(bind=database.database.engine)
 
 app = FastAPI()
+
+# db sementara buat simpen data login
+login_history = []
 
 origins = [
     "http://localhost:5173",
@@ -118,3 +123,16 @@ async def store_click(
 ):
     store_click_position(user_id, x, y)
     return {"status": "ok", "user_id": user_id}
+
+@app.post("/verify-network-fraud")
+async def verify_network_fraud_endpoint(
+    request: Request,
+    user_id: str = Form(...),
+    device_id: str = Form(...)
+):
+    return await evaluate_network_fraud_service(
+        request=request,
+        user_id=user_id,
+        device_id=device_id,
+        login_history=login_history
+    )
