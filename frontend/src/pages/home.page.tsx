@@ -67,11 +67,11 @@ export default function HomePage() {
                 </span>
               </div>
               <h2 className="text-6xl font-bold text-gray-900 tracking-tight">{feature.title}</h2>
-              <p className="text-xl text-gray-500 leading-relaxed max-w-md">{feature.description}</p>
-              <a href={feature.url} className="text-blue-600 font-semibold hover:underline">Learn more</a>
+              <p className="text-lg text-gray-500 leading-relaxed max-w-md">{feature.description}</p>
+              <a href={feature.url} className="text-blue-600 font-semibold hover:underline transition-all duration-200">Learn more</a>
             </div>
             
-            <div className="relative group">
+            <div className="relative group hover:scale-105 transition-transform duration-300">
               <div className="absolute -inset-4 bg-linear-to-tr from-blue-50 to-indigo-50 rounded-[40px] z-0 opacity-50 group-hover:opacity-100 transition-opacity" />
               <div className="relative h-112.5 bg-white rounded-3xl border border-gray-100 shadow-2xl flex items-center justify-center overflow-hidden">
                  <div className="w-24 h-24 bg-blue-50 rounded-full animate-pulse" />
