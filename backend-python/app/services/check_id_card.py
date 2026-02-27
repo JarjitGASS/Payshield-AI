@@ -6,35 +6,78 @@ from datetime import datetime
 
 async def check_id_card(file: UploadFile, nik: str, fullname: str, pob: str, dob: str, gender: str):
   prompt = """
-  You are an OCR and identity extraction system.
+You are an OCR, identity extraction, and identity verification system.
+You must follow instructions strictly.
 
-  Analyze the provided Indonesian ID card (KTP) image.
+Analyze the provided image of a person holding an Indonesian ID card (KTP).
 
-  Extract the following fields ONLY if they are clearly visible:
-  - nik
-  - name
-  - gender
-  - place_of_birth
-  - date_of_birth
+==================================================
+OUTPUT RULES (CRITICAL)
+==================================================
+1. Return ONE valid JSON object only.
+2. Do NOT include explanations, comments, markdown, or extra text outside JSON.
+3. Do NOT guess or infer information that is not clearly visible.
+4. If uncertain, use null or conservative values as specified.
+5. All fields defined below MUST exist in the output.
 
-  Rules:
-  1. Use the exact field names listed above.
-  2. Return output in valid JSON only.
-  3. Do NOT include explanations, comments, or extra text.
-  4. If a field is not visible or unreadable, return null.
-  5. The date_of_birth on the ID card is written in DD-MM-YYYY format.
-  6. Use DD-MM-YYYY format for date_of_birth in the output as well.
-  7. Gender must be either "LAKI-LAKI" or "PEREMPUAN".
-  8. NIK must be numeric without spaces.
+==================================================
+TASKS
+==================================================
 
-  Output format:
-  {
+A. OCR & DATA EXTRACTION  
+Extract the following fields ONLY if clearly visible on the ID card:
+- nik
+- name
+- gender
+- place_of_birth
+- date_of_birth
+
+OCR RULES:
+- nik: numeric only, no spaces
+- gender: "LAKI-LAKI" or "PEREMPUAN"
+- date_of_birth format: DD-MM-YYYY
+- If unreadable or missing: null
+
+B. IDENTITY VERIFICATION  
+Using the SAME image:
+1. Identify issuing country and document type
+2. Compare the face on the card with the person holding it
+3. Check authenticity indicators (hologram, fonts, layout, physical card)
+4. Assess text legibility
+5. Assess whether the image appears AI-generated or digitally manipulated
+
+VERIFICATION RULES:
+- Do NOT assume authenticity
+- If evidence is insufficient, choose conservative values
+
+==================================================
+FINAL JSON OUTPUT SCHEMA
+==================================================
+
+{
+  "ocr_result": {
     "nik": string | null,
     "name": string | null,
     "gender": "LAKI-LAKI" | "PEREMPUAN" | null,
     "place_of_birth": string | null,
     "date_of_birth": string | null
+  },
+  "verification_result": {
+    "generated_by_ai": "YES" | "NO" | "UNCLEAR",
+    "country": string | null,
+    "document_type": string | null,
+    "face_match": "MATCH" | "MISMATCH" | "INCONCLUSIVE",
+    "card_authenticity": "AUTHENTIC" | "SUSPICIOUS" | "INCONCLUSIVE",
+    "text_legibility": "CLEAR" | "PARTIAL" | "UNREADABLE",
+    "confidence_score": number,
+    "reasoning": string
   }
+}
+
+FINAL CONSTRAINTS:
+- confidence_score must be between 0 and 100
+- reasoning must be brief, factual, and based only on visible evidence
+- Output EXACTLY one JSON object matching the schema above
   """
   system = """
   Analyze the ID card image and extract the required fields.
@@ -58,15 +101,16 @@ async def check_id_card(file: UploadFile, nik: str, fullname: str, pob: str, dob
   except json.JSONDecodeError:
     raise HTTPException(status_code=400, detail="INVALID_QWEN_JSON")
   
+  ocr_result = qwen.get("ocr_result")
   for field in ["name", "place_of_birth", "date_of_birth", "gender"]:
-    if not qwen.get(field):
+    if not ocr_result.get(field):
       raise HTTPException(status_code=400, detail=f"MISSING_{field.upper()}")
 
-  qwen_name = qwen["name"].strip().upper()
-  qwen_pob = qwen["place_of_birth"].strip().upper()
-  qwen_dob = qwen["date_of_birth"].strip()
-  qwen_gender = qwen["gender"].strip().upper()
-  qwen_nik = qwen.get("nik")
+  qwen_name = ocr_result["name"].strip().upper()
+  qwen_pob = ocr_result["place_of_birth"].strip().upper()
+  qwen_dob = ocr_result["date_of_birth"].strip()
+  qwen_gender = ocr_result["gender"].strip().upper()
+  qwen_nik = ocr_result.get("nik")
   qwen_nik = qwen_nik.strip() if isinstance(qwen_nik, str) else qwen_nik
 
   if input_gender in ["MALE", "L", "LAKI-LAKI"]:
