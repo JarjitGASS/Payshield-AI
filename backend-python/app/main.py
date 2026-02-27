@@ -9,6 +9,9 @@ from services.verify_email_age_card import verify_email_age
 from services.name_entropy import shannon_entropy, has_digits_or_symbols, ngram_entropy
 from services.verify_geoip import check_geo_ip, get_real_ip
 from services.sentiment_entity import analyze_company_sentiment
+from services.auth_service import login_service
+from model.auth_input import LoginRequest
+from model.auth_result import LoginResponse
 
 load_dotenv()
 
@@ -30,6 +33,10 @@ app.add_middleware(
 @app.get("/")
 def health_check():
     return {"status": "ok"}
+
+@app.post("/auth/login")
+async def login(body: LoginRequest) -> LoginResponse:
+    return await login_service(body)
 
 @app.post("/register")
 async def register(
