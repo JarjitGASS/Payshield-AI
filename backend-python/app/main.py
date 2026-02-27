@@ -19,7 +19,7 @@ from dtos.auth_input import LoginRequest
 from dtos.auth_result import LoginResponse
 from database.database import SessionLocal
 import model, database.database
-from services.network_fraud import get_network_signals, evaluate_network_fraud_service
+from services.network_fraud import evaluate_network_fraud_service
 from datetime import datetime, timedelta, timezone
 
 load_dotenv()
@@ -119,8 +119,8 @@ async def store_click(
     store_click_position(user_id, x, y)
     return {"status": "ok", "user_id": user_id}
 
-@app.post("/verify-fraud-activity")
-async def verify_fraud_activity_endpoint(
+@app.post("/verify-network-fraud")
+async def verify_network_fraud_endpoint(
     request: Request,
     user_id: str = Form(...),
     device_id: str = Form(...)
