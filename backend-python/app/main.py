@@ -14,6 +14,7 @@ from services.name_entropy import shannon_entropy, has_digits_or_symbols, ngram_
 from services.verify_geoip import check_geo_ip, get_real_ip
 from services.sentiment_entity import analyze_company_sentiment
 from services.auth_service import login_service
+from services.navigation_consistency_score import store_click_position
 from dtos.auth_input import LoginRequest
 from dtos.auth_result import LoginResponse
 from database.database import SessionLocal
@@ -103,3 +104,12 @@ async def sentiment_entity_analysis(
     result = await analyze_company_sentiment(company_name)
 
     return result
+
+@app.post("/store-click")
+async def store_click(
+    user_id: str = Form(...),
+    x: int = Form(...),
+    y: int = Form(...)
+):
+    store_click_position(user_id, x, y)
+    return {"status": "ok", "user_id": user_id}
