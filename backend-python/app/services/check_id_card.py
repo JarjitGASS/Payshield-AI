@@ -2,9 +2,11 @@ from qwen.qwen import qwen_file
 from fastapi import HTTPException, UploadFile
 import json
 from datetime import datetime
+from database.database import SessionLocal
+from model.model import User
+from argon2 import PasswordHasher
 
-
-async def check_id_card(file: UploadFile, nik: str, fullname: str, pob: str, dob: str, gender: str):
+async def check_id_card(username: str, password: str, confirm: str, file: UploadFile, nik: str, fullname: str, pob: str, dob: str, gender: str):
   prompt = """
 You are an OCR, identity extraction, and identity verification system.
 You must follow instructions strictly.
@@ -83,10 +85,22 @@ FINAL CONSTRAINTS:
   Analyze the ID card image and extract the required fields.
   """
 
+  db = SessionLocal()
+
+  input_username = username.strip()
+  input_password = password.strip()
+  input_confirm = confirm.strip()
+  input_nik = nik.strip()
   input_name = fullname.strip().upper()
   input_pob = pob.strip().upper()
   input_dob = dob.strip()
   input_gender = gender.strip().upper()
+  
+  if input_password != input_confirm:
+    raise HTTPException(status_code=400, detail="PASSWORDS_DO_NOT_MATCH")
+
+  if db.query(User).filter(User.username == input_username).first():
+    raise HTTPException(status_code=400, detail="USERNAME_ALREADY_EXISTS")
 
   try:
     dob_obj = datetime.strptime(input_dob, "%Y-%m-%d")
@@ -102,36 +116,50 @@ FINAL CONSTRAINTS:
     raise HTTPException(status_code=400, detail="INVALID_QWEN_JSON")
   
   ocr_result = qwen.get("ocr_result")
-  for field in ["name", "place_of_birth", "date_of_birth", "gender"]:
-    if not ocr_result.get(field):
-      raise HTTPException(status_code=400, detail=f"MISSING_{field.upper()}")
-
-  qwen_name = ocr_result["name"].strip().upper()
-  qwen_pob = ocr_result["place_of_birth"].strip().upper()
-  qwen_dob = ocr_result["date_of_birth"].strip()
-  qwen_gender = ocr_result["gender"].strip().upper()
+  print(ocr_result)
+  qwen_name = ocr_result["name"]
+  qwen_pob = ocr_result["place_of_birth"]
+  qwen_dob = ocr_result["date_of_birth"]
+  qwen_gender = ocr_result["gender"]
   qwen_nik = ocr_result.get("nik")
-  qwen_nik = qwen_nik.strip() if isinstance(qwen_nik, str) else qwen_nik
+  qwen_nik = qwen_nik
 
   if input_gender in ["MALE", "L", "LAKI-LAKI"]:
     input_gender = "LAKI-LAKI"
   elif input_gender in ["FEMALE", "P", "PEREMPUAN"]:
     input_gender = "PEREMPUAN"
 
-  if nik != qwen_nik:
-    raise HTTPException(status_code=400, detail={"message": "NIK_MISMATCH", "analysis": qwen})
+  is_valid = True
+  if input_nik != qwen_nik:
+    is_valid = False
 
   if input_name != qwen_name:
-    raise HTTPException(status_code=400, detail={"message": "NAME_MISMATCH", "analysis": qwen})
+    is_valid = False
 
   if input_pob != qwen_pob:
-    raise HTTPException(status_code=400, detail={"message": "POB_MISMATCH", "analysis": qwen})
+    is_valid = False
 
   if input_dob != qwen_dob:
-    raise HTTPException(status_code=400, detail={"message": "DOB_MISMATCH", "analysis": qwen})
+    is_valid = False
 
   if input_gender != qwen_gender:
-    raise HTTPException(status_code=400, detail={"message": "GENDER_MISMATCH", "analysis": qwen})
+    is_valid = False
+
+  ph = PasswordHasher()
+  hashed_password = ph.hash(input_password)
+  
+  db_user = User(
+      username=input_username,
+      password=hashed_password,
+      name=input_name,
+      nik=input_nik,
+      pob=input_pob,
+      dob=dob_obj,         
+      isActive=is_valid          
+  )
+  db.add(db_user)
+  db.commit()
+  db.refresh(db_user)
 
   return {
     "success": True,

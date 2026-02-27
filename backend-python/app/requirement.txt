@@ -15,3 +15,4 @@ Pillow
 redis
 python-whois
 pydantic-settings
+argon2-cffi

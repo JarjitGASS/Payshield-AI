@@ -27,6 +27,8 @@ app = FastAPI()
 
 origins = [
     "http://localhost:5173",
+    "http://localhost:80",
+    "http://localhost:85",
     "http://127.0.0.1:5173",
 ]
 
@@ -55,6 +57,9 @@ async def login(body: LoginRequest) -> LoginResponse:
 
 @app.post("/register")
 async def register(
+    username: str = Form(...),
+    password: str = Form(...),
+    confirmPassword: str = Form(...),
     nik: str = Form(...),
     fullname: str = Form(...),
     pob: str = Form(...),
@@ -63,7 +68,7 @@ async def register(
     file: UploadFile = File(...)
     # blm ada email
 ):
-    return await check_id_card(file, nik, fullname, pob, dob, gender)
+    return await check_id_card(username, password, confirmPassword, file, nik, fullname, pob, dob, gender)
 
 @app.post("/verify-id-card")
 async def verify_id_card_endpoint(file: UploadFile = File(...)):
