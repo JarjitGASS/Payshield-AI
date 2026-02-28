@@ -1,54 +1,53 @@
 from fastapi import Request
-from datetime import datetime, timedelta
-import uuid
+from datetime import datetime, timezone
+import json
+from dtos.network_input import NetworkInput
 
 from services.verify_geoip import get_real_ip
-from dtos.network_input import NetworkInput
-from dtos.session_state import SessionState, SessionStatus
 from services.network_signal import get_network_signals
 
-async def evaluate_network_fraud_service(
-    request: Request, 
-    user_id: str, 
-    device_id: str, 
-    login_history: list
-) -> dict:
-    
-    ip = get_real_ip(request)
+from database.redis_client import redis_client
 
-    signals = get_network_signals(ip, device_id, login_history)
+NETWORK_LOGIN_HISTORY_KEY = "network:login_history"
+NETWORK_LOGIN_HISTORY_MAX_LEN = 5000
 
-    current_session_id = str(uuid.uuid4())
-    
-    state = SessionState(
-        session_id=current_session_id,
-        status=SessionStatus.PENDING,
-        current_step="Initializing network agent"
-    )
+def _fetch_login_history(limit: int = NETWORK_LOGIN_HISTORY_MAX_LEN) -> list[dict]:
+    raw_logs = redis_client.lrange(NETWORK_LOGIN_HISTORY_KEY, 0, max(limit - 1, 0))
+    parsed_logs = []
 
-    from agents.synthetic_network_agent import run_network_agent
+    for raw in raw_logs:
+        try:
+            decoded = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else raw
+            parsed_logs.append(json.loads(decoded))
+        except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
+            continue
 
-    agent_result = run_network_agent(features=signals, state=state)
+    return parsed_logs
 
-    login_history.append({
+def build_network_features(
+    request: Request,
+    device_id: str,
+) -> tuple[str, NetworkInput]:
+    client_ip = get_real_ip(request)
+    login_history = _fetch_login_history()
+    signals = get_network_signals(client_ip, device_id, login_history)
+    return client_ip, signals
+
+
+def append_login_history(
+    user_id: str,
+    ip: str,
+    device_id: str,
+) -> None:
+    log_entry = {
         "user_id": user_id,
         "ip": ip,
         "device_id": device_id,
-        "timestamp": datetime.now()
-    })
-
-    return {
-        "status": 200,
-        "ip_address": ip,
-        "device_id": device_id,
-        "session_info": {
-            "session_id": state.session_id,
-            "accumulated_flags": state.flags,
-            "agent_retries": state.retry_count
-        },
-        "signals_detected": {
-            "shared_ip_count": signals.shared_ip_count,
-            "shared_device_count": signals.shared_device_count
-        },
-        "ai_analysis": agent_result.model_dump() if hasattr(agent_result, 'model_dump') else agent_result.dict()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+    payload = json.dumps(log_entry)
+    pipe = redis_client.pipeline()
+    pipe.lpush(NETWORK_LOGIN_HISTORY_KEY, payload)
+    pipe.ltrim(NETWORK_LOGIN_HISTORY_KEY, 0, NETWORK_LOGIN_HISTORY_MAX_LEN - 1)
+    pipe.execute()

@@ -21,7 +21,7 @@ from dtos.auth_input import LoginRequest
 from dtos.auth_result import LoginResponse
 from database.database import SessionLocal
 import model, database.database
-from services.network_fraud import evaluate_network_fraud_service
+from services.network_fraud import build_network_features, append_login_history
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 import secrets, time
@@ -45,9 +45,6 @@ load_dotenv()
 database.database.Base.metadata.create_all(bind=database.database.engine)
 
 app = FastAPI()
-
-# db sementara buat simpen data login
-login_history = []
 
 origins = [
     "http://localhost:5173",
@@ -129,6 +126,7 @@ async def validate_name_entropy(name: str = Form()):
         "ngram_entropy": ngram_result,
         "digitsOrSymbols": name_has_digit_or_symbols
     }
+
 @app.post("/verify-geo-ip")
 async def verify_geo_ip_endpoint(
     request: Request,
@@ -163,12 +161,35 @@ async def verify_network_fraud_endpoint(
     user_id: str = Form(...),
     device_id: str = Form(...)
 ):
-    return await evaluate_network_fraud_service(
+    ip, signals = build_network_features(
         request=request,
-        user_id=user_id,
         device_id=device_id,
-        login_history=login_history
     )
+
+    state = SessionState(
+        session_id=str(uuid.uuid4()),
+        user_id=user_id,
+        current_step="Initializing network agent",
+    )
+
+    network_result = await run_network_agent(signals, state)
+
+    append_login_history(
+        user_id=user_id,
+        ip=ip,
+        device_id=device_id,
+    )
+
+    return {
+        "status": 200,
+        "session_id": state.session_id,
+        "fraud_assessment": {
+            "risk_score": network_result.risk,
+            "confidence_score": network_result.confidence,
+            "triggered_flags": state.flags,
+            "reason": network_result.explanation,
+        },
+    }
 
 router = APIRouter()
 class LoginHourRequest(BaseModel):
