@@ -21,6 +21,7 @@ class SessionState(BaseModel):
     at each step, enabling the Reason-Act loop.
     """
     session_id: str = Field(..., description="Unique session identifier")
+    user_id: Optional[str] = Field(default=None, description="User ID being assessed")
     status: SessionStatus = Field(default=SessionStatus.PENDING, description="Current workflow stage")
     current_step: str = Field(default="", description="Human-readable current agent step")
     retry_count: int = Field(default=0, description="Number of retries attempted in reason-act loop")

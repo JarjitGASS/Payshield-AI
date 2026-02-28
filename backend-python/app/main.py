@@ -37,6 +37,7 @@ from agents.synthetic_network_agent import run_network_agent
 from agents.orchestrator import run_orchestrator
 from guardrails.result_validation import enforce_policy
 from services.rag_service import store_human_review, fetch_pending_reviews
+from services.user_activation import activate_user, deactivate_user
 import uuid
 import asyncio
 
@@ -183,8 +184,9 @@ async def agentic_risk_assessment(
     identity: IdentityInput,
     behavioral: BehavioralInput,
     network: NetworkInput,
+    user_id: str = Form(...),
 ):
-    state = SessionState(session_id=str(uuid.uuid4()))
+    state = SessionState(session_id=str(uuid.uuid4()), user_id=user_id)
     
     identity_result = await run_identity_agent(identity, state)
     behavioral_result = await run_behavioral_agent(behavioral, state)
@@ -195,6 +197,7 @@ async def agentic_risk_assessment(
     final_result = await enforce_policy(meta_result, state)
 
     return {
+        "user_id": user_id,
         "session_state": state.model_dump(),
         "final_decision": final_result.decision,
         "meta_result": final_result.model_dump(),
@@ -233,12 +236,27 @@ async def submit_human_review(body: HumanReviewInput):
             override_decision=applied_decision,
             override_note=override_note,
         )
+
+        # Activate or deactivate the user based on the analyst's decision
+        user_id = result.get("user_id")
+        activation_message = ""
+        if user_id and applied_decision in ("APPROVE", "REJECT"):
+            try:
+                if applied_decision == "APPROVE":
+                    await asyncio.to_thread(activate_user, user_id)
+                    activation_message = f" User {user_id} activated."
+                elif applied_decision == "REJECT":
+                    await asyncio.to_thread(deactivate_user, user_id)
+                    activation_message = f" User {user_id} deactivated."
+            except (ValueError, RuntimeError) as activation_err:
+                activation_message = f" User activation failed: {activation_err}"
+
         return HumanReviewResponse(
             session_id=body.session_id,
             applied_decision=applied_decision,
             message=(
                 f"Review stored. Original decision: {result['original_decision']}, "
-                f"analyst override: {applied_decision}"
+                f"analyst override: {applied_decision}.{activation_message}"
             ),
         )
     except ValueError as e:
