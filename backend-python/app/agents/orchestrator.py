@@ -15,6 +15,7 @@ from qwen.qwen import qwen_chat
 from services.rag_service import (
     fetch_orchestrator_history,
     fetch_similar_flags_history,
+    fetch_human_review_context,
     store_orchestrator_result,
 )
 from services.adaptive_threshold import get_adaptive_thresholds
@@ -73,7 +74,7 @@ OUTPUT FORMAT (strict JSON, no extra text):
 
 
 def _build_rag_context(all_flags: list) -> str:
-    """Fetch historical orchestrator decisions and similar-flag cases (RAG)."""
+    """Fetch historical orchestrator decisions, similar-flag cases, and HITL reviews (RAG)."""
     parts = []
 
     # Recent orchestrator decisions — returns a formatted string directly
@@ -92,6 +93,16 @@ def _build_rag_context(all_flags: list) -> str:
             parts.append(
                 "These past cases had overlapping flags — ensure decision consistency.\n"
             )
+
+    # Human-in-the-loop analyst reviews — learn from human corrections
+    hitl_context = fetch_human_review_context(limit=5)
+    if hitl_context:
+        parts.append("\n--- HUMAN ANALYST REVIEWS (HITL) ---")
+        parts.append(hitl_context)
+        parts.append(
+            "These are real analyst corrections. If the analyst CORRECTED the AI, "
+            "adjust your reasoning to avoid repeating the same mistake.\n"
+        )
 
     return "\n".join(parts)
 
