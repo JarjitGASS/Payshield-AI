@@ -21,7 +21,7 @@ from dtos.auth_input import LoginRequest
 from dtos.auth_result import LoginResponse
 from database.database import SessionLocal
 import model, database.database
-from services.network_fraud import evaluate_network_fraud_service
+from services.network_fraud import build_network_features, append_login_history
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 import secrets, time
@@ -37,6 +37,7 @@ from agents.synthetic_network_agent import run_network_agent
 from agents.orchestrator import run_orchestrator
 from guardrails.result_validation import enforce_policy
 from services.rag_service import store_human_review, fetch_pending_reviews
+from services.user_activation import activate_user, deactivate_user
 import uuid
 import asyncio
 
@@ -44,9 +45,6 @@ load_dotenv()
 database.database.Base.metadata.create_all(bind=database.database.engine)
 
 app = FastAPI()
-
-# db sementara buat simpen data login
-login_history = []
 
 origins = [
     "http://localhost:5173",
@@ -128,6 +126,7 @@ async def validate_name_entropy(name: str = Form()):
         "ngram_entropy": ngram_result,
         "digitsOrSymbols": name_has_digit_or_symbols
     }
+
 @app.post("/verify-geo-ip")
 async def verify_geo_ip_endpoint(
     request: Request,
@@ -162,12 +161,35 @@ async def verify_network_fraud_endpoint(
     user_id: str = Form(...),
     device_id: str = Form(...)
 ):
-    return await evaluate_network_fraud_service(
+    ip, signals = build_network_features(
         request=request,
-        user_id=user_id,
         device_id=device_id,
-        login_history=login_history
     )
+
+    state = SessionState(
+        session_id=str(uuid.uuid4()),
+        user_id=user_id,
+        current_step="Initializing network agent",
+    )
+
+    network_result = await run_network_agent(signals, state)
+
+    append_login_history(
+        user_id=user_id,
+        ip=ip,
+        device_id=device_id,
+    )
+
+    return {
+        "status": 200,
+        "session_id": state.session_id,
+        "fraud_assessment": {
+            "risk_score": network_result.risk,
+            "confidence_score": network_result.confidence,
+            "triggered_flags": state.flags,
+            "reason": network_result.explanation,
+        },
+    }
 
 router = APIRouter()
 class LoginHourRequest(BaseModel):
@@ -183,8 +205,9 @@ async def agentic_risk_assessment(
     identity: IdentityInput,
     behavioral: BehavioralInput,
     network: NetworkInput,
+    user_id: str = Form(...),
 ):
-    state = SessionState(session_id=str(uuid.uuid4()))
+    state = SessionState(session_id=str(uuid.uuid4()), user_id=user_id)
     
     identity_result = await run_identity_agent(identity, state)
     behavioral_result = await run_behavioral_agent(behavioral, state)
@@ -195,15 +218,11 @@ async def agentic_risk_assessment(
     final_result = await enforce_policy(meta_result, state)
 
     return {
+        "user_id": user_id,
         "session_state": state.model_dump(),
         "final_decision": final_result.decision,
         "meta_result": final_result.model_dump(),
     }
-
-
-# ─────────────────────────────────────────────────────────────
-# HITL: Human-in-the-Loop review endpoints
-# ─────────────────────────────────────────────────────────────
 
 @app.post("/human-review", response_model=HumanReviewResponse)
 async def submit_human_review(body: HumanReviewInput):
@@ -216,7 +235,6 @@ async def submit_human_review(body: HumanReviewInput):
     The review is stored in OrchestratorHistory and injected into future
     agent RAG context so the system learns from analyst corrections.
     """
-    # Determine the effective override decision
     if body.rating == ReviewRating.BAD:
         if body.override_decision is None:
             raise HTTPException(
@@ -239,19 +257,33 @@ async def submit_human_review(body: HumanReviewInput):
             override_decision=applied_decision,
             override_note=override_note,
         )
+
+        # Activate or deactivate the user based on the analyst's decision
+        user_id = result.get("user_id")
+        activation_message = ""
+        if user_id and applied_decision in ("APPROVE", "REJECT"):
+            try:
+                if applied_decision == "APPROVE":
+                    await asyncio.to_thread(activate_user, user_id)
+                    activation_message = f" User {user_id} activated."
+                elif applied_decision == "REJECT":
+                    await asyncio.to_thread(deactivate_user, user_id)
+                    activation_message = f" User {user_id} deactivated."
+            except (ValueError, RuntimeError) as activation_err:
+                activation_message = f" User activation failed: {activation_err}"
+
         return HumanReviewResponse(
             session_id=body.session_id,
             applied_decision=applied_decision,
             message=(
                 f"Review stored. Original decision: {result['original_decision']}, "
-                f"analyst override: {applied_decision}"
+                f"analyst override: {applied_decision}.{activation_message}"
             ),
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/human-review/pending")
 async def get_pending_reviews():

@@ -92,7 +92,6 @@ def fetch_orchestrator_history(
         except Exception as e:
             return f"RAG orchestrator fetch failed: {e}"
 
-
 def fetch_similar_flags_history(flags: List[str], limit: int = 3) -> str:
     """
     Retrieve historical cases that share the same flags as the current assessment.
@@ -127,11 +126,6 @@ def fetch_similar_flags_history(flags: List[str], limit: int = 3) -> str:
             return "Historical cases with similar flags:\n" + "\n".join(context_lines)
         except Exception as e:
             return f"RAG similar-flags fetch failed: {e}"
-
-
-# ─────────────────────────────────────────────────────────────
-# STORE: Save agent results for future RAG retrieval
-# ─────────────────────────────────────────────────────────────
 
 def store_agent_result(
     session_id: str,
@@ -171,12 +165,14 @@ def store_orchestrator_result(
     confidence: float,
     explanation: str,
     flags: list,
+    user_id: Optional[str] = None,
 ) -> None:
     """Store an orchestrator result into the RAG history table."""
     with _get_db() as db:
         try:
             record = OrchestratorHistory(
                 session_id=session_id,
+                user_id=user_id,
                 identity_risk=identity_risk,
                 behavior_risk=behavior_risk,
                 network_risk=network_risk,
@@ -191,11 +187,6 @@ def store_orchestrator_result(
         except Exception as e:
             db.rollback()
             print(f"[RAG] Failed to store orchestrator result: {e}")
-
-
-# ─────────────────────────────────────────────────────────────
-# HITL: Human-in-the-Loop review storage and retrieval
-# ─────────────────────────────────────────────────────────────
 
 def store_human_review(
     session_id: str,
@@ -232,6 +223,7 @@ def store_human_review(
 
             return {
                 "session_id": record.session_id,
+                "user_id": record.user_id,
                 "original_decision": record.decision,
                 "override_decision": record.human_override_decision,
                 "override_note": record.human_override_note,
@@ -242,7 +234,6 @@ def store_human_review(
         except Exception as e:
             db.rollback()
             raise RuntimeError(f"Failed to store human review: {e}")
-
 
 def fetch_human_review_context(limit: int = 5) -> str:
     """

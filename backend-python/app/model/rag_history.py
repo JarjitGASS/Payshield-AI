@@ -35,6 +35,7 @@ class OrchestratorHistory(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id = Column(String, unique=True, index=True, nullable=False)
+    user_id = Column(String, index=True, nullable=True)           # User being assessed
     identity_risk = Column(Float, nullable=False)
     behavior_risk = Column(Float, nullable=False)
     network_risk = Column(Float, nullable=False)

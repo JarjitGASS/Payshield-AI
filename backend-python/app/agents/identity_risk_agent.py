@@ -48,7 +48,7 @@ OUTPUT FORMAT (strict JSON, no extra text):
 }}}}
 
 AVAILABLE FLAGS:
-- KTP_MISMATCH, FACE_MISMATCH, NEW_EMAIL, NAME_VALIDATION,
+- KTP_MISMATCH, FACE_MISMATCH, NEW_EMAIL_DOMAIN, NAME_VALIDATION,
   GEO_IP_MISMATCH, SUSPICIOUS_NAME, NEGATIVE_SENTIMENT
 """
 
@@ -102,8 +102,8 @@ Evaluate identity risk from these features:
   (1.0 = perfect match, 0.0 = no match)
 - face_similarity_score: {features.face_similarity_score}
   (1.0 = same person, 0.0 = different person)
-- email_age_days: {features.email_age_days}
-  (low = recently created email = suspicious)
+- domain_email_age_days: {features.email_age_days}
+  (low = recently created email domain = suspicious)
 - geo_ip_mismatch: {features.geo_ip_mismatch}
   (true = declared address doesn't match IP location)
 - name_entropy: {features.name_entropy}

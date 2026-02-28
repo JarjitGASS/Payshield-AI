@@ -6,7 +6,7 @@ from qwen.qwen import qwen_chat
 async def analyze_company_sentiment(company_name: str):
     system = """
     You are a Corporate Risk Analyst. You must respond ONLY with a valid JSON object. 
-    Do not include markdown code blocks (like ```json), no preamble, and no conversational text
+    Do not include markdown code blocks (like ```json), no preamble, and no conversational text.
     """
 
     prompt = f"""
@@ -19,12 +19,17 @@ async def analyze_company_sentiment(company_name: str):
       "risk_level": "Low/Medium/High",
       "sentiment_score": integer (0-100),
       "is_good_company": boolean,
-      "reasoning": "string"
+      "reasoning": "string",
+      "legitimacy": "string"
     }}
     
     Analysis Guide:
     - If the company has fraud reports or bad debt history, set is_good_company to false.
     - If the company is unknown, provide a neutral score of 50.
+    - For "legitimacy", evaluate their operational footprint and categorize as:
+        1. "Established" (Recognized business, clear product/service, visible digital footprint)
+        2. "Suspicious" (Shell company traits, unregulated, hidden ownership, or scam warnings)
+        3. "Unknown" (Cannot find sufficient public data to verify existence)
     """
 
     raw_response = qwen_chat(prompt, system)
