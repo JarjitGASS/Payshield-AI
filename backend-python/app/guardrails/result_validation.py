@@ -5,6 +5,7 @@ Replaces hardcoded thresholds with data-driven adaptive thresholds
 computed from historical orchestrator decisions. Falls back to safe
 defaults when insufficient history exists.
 """
+import asyncio
 from dtos.meta_agent_result import MetaAgentResult
 from dtos.session_state import SessionState, SessionStatus
 from services.adaptive_threshold import get_adaptive_thresholds
@@ -50,18 +51,14 @@ def validate(result: MetaAgentResult, thresholds: dict = None) -> bool:
             result.identity_risk, result.behavior_risk,
             result.network_risk, result.overall_risk, result.confidence
         ]
-        # All scores must be within valid range
         if not all(0.0 <= s <= 1.0 for s in scores):
             return False
-        # Decision must be a valid option
         if result.decision not in ["APPROVE", "REVIEW", "REJECT"]:
             return False
-        # Decision must be consistent with risk score (using adaptive thresholds)
         if result.overall_risk > reject_t and result.decision == "APPROVE":
             return False
         if result.overall_risk < approve_t and result.decision == "REJECT":
             return False
-        # Explanation must not be empty
         if not result.explanation or len(result.explanation.strip()) == 0:
             return False
         return True
@@ -69,9 +66,27 @@ def validate(result: MetaAgentResult, thresholds: dict = None) -> bool:
         return False
 
 
-def enforce_policy(result: MetaAgentResult, state: SessionState) -> MetaAgentResult:
+def _store_final_result_sync(result: MetaAgentResult, state: SessionState) -> None:
+    """Persist the guardrail-enforced result to RAG history (sync, called via to_thread)."""
+    try:
+        store_orchestrator_result(
+            session_id=state.session_id,
+            identity_risk=result.identity_risk,
+            behavior_risk=result.behavior_risk,
+            network_risk=result.network_risk,
+            overall_risk=result.overall_risk,
+            decision=result.decision,
+            confidence=result.confidence,
+            explanation=result.explanation,
+            flags=result.flags,
+        )
+    except Exception as e:
+        print(f"[Guardrails] Failed to store result to RAG: {e}")
+
+
+async def enforce_policy(result: MetaAgentResult, state: SessionState) -> MetaAgentResult:
     """
-    DETERMINISTIC POLICY ENFORCEMENT with adaptive thresholds:
+    DETERMINISTIC POLICY ENFORCEMENT with adaptive thresholds (async):
 
     This is the final guardrail layer. It overrides the AI decision
     if the output is invalid or inconsistent with data-driven thresholds.
@@ -89,8 +104,8 @@ def enforce_policy(result: MetaAgentResult, state: SessionState) -> MetaAgentRes
     """
     state.transition(SessionStatus.GUARDRAIL_CHECK, step="Enforcing policy guardrails")
 
-    # ── Fetch adaptive thresholds ───────────────────────────
-    thresholds = _get_thresholds()
+    # Fetch adaptive thresholds (sync DB call, offloaded to thread)
+    thresholds = await asyncio.to_thread(_get_thresholds)
     approve_t = thresholds["approve_threshold"]
     reject_t = thresholds["reject_threshold"]
     min_conf = thresholds["min_confidence"]
@@ -108,7 +123,7 @@ def enforce_policy(result: MetaAgentResult, state: SessionState) -> MetaAgentRes
         result.explanation += " [GUARDRAIL: System failure flag detected, escalated to REVIEW]"
         state.final_decision = "REVIEW"
         state.transition(SessionStatus.REVIEW, step="Escalated: system failure flag")
-        _store_final_result(result, state)
+        await asyncio.to_thread(_store_final_result_sync, result, state)
         return result
 
     # Rule 2: Invalid AI output → force REVIEW
@@ -117,7 +132,7 @@ def enforce_policy(result: MetaAgentResult, state: SessionState) -> MetaAgentRes
         result.explanation += " [GUARDRAIL: Output failed validation, escalated to REVIEW]"
         state.final_decision = "REVIEW"
         state.transition(SessionStatus.REVIEW, step="Escalated: validation failed")
-        _store_final_result(result, state)
+        await asyncio.to_thread(_store_final_result_sync, result, state)
         return result
 
     # Rule 3-6: Deterministic policy enforcement with ADAPTIVE thresholds
@@ -146,25 +161,7 @@ def enforce_policy(result: MetaAgentResult, state: SessionState) -> MetaAgentRes
     state.final_decision = result.decision
     state.final_overall_risk = result.overall_risk
 
-    # ── Store final decision to RAG for future threshold adaptation ──
-    _store_final_result(result, state)
+    # Store final decision to RAG for future threshold adaptation (offloaded)
+    await asyncio.to_thread(_store_final_result_sync, result, state)
 
     return result
-
-
-def _store_final_result(result: MetaAgentResult, state: SessionState) -> None:
-    """Persist the guardrail-enforced result to RAG history."""
-    try:
-        store_orchestrator_result(
-            session_id=state.session_id,
-            identity_risk=result.identity_risk,
-            behavior_risk=result.behavior_risk,
-            network_risk=result.network_risk,
-            overall_risk=result.overall_risk,
-            decision=result.decision,
-            confidence=result.confidence,
-            explanation=result.explanation,
-            flags=result.flags,
-        )
-    except Exception as e:
-        print(f"[Guardrails] Failed to store result to RAG: {e}")

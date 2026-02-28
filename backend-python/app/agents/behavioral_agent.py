@@ -7,6 +7,7 @@ Behavioral Anomaly Agent — fully autonomous with:
   5. Self-calibration from adaptive thresholds
 """
 import json
+import asyncio
 from dtos.agent_result import AgentResult
 from dtos.behavioral_input import BehavioralInput
 from dtos.session_state import SessionState, SessionStatus
@@ -168,21 +169,22 @@ def _run_tool_enrichment(features: BehavioralInput, state: SessionState) -> None
                 features.navigation_consistency_score = float(score)
 
 
-def run_behavioral_agent(features: BehavioralInput, state: SessionState) -> AgentResult:
+async def run_behavioral_agent(features: BehavioralInput, state: SessionState) -> AgentResult:
     """
-    Full Reason-Act Loop:
+    Full Reason-Act Loop (async):
       Fix 1 — Tool dispatch BEFORE LLM call (enriches navigation consistency)
       Fix 2 — RAG fetch BEFORE LLM, store AFTER success
       Fix 4 — Upstream SessionState context injected into prompt
       Corrective feedback on retry
+      qwen_chat is blocking — offloaded to a thread via asyncio.to_thread()
     """
     state.transition(SessionStatus.AGENT_RUNNING, step=f"Running {AGENT_STEP}")
 
-    # Fix 1: Tool dispatch — enrich features before building the prompt
+    # Fix 1: Tool dispatch — sync, fast
     _run_tool_enrichment(features, state)
 
-    # Fix 2: RAG fetch — retrieve history before first LLM call
-    rag_ctx = _build_rag_context()
+    # Fix 2: RAG fetch — sync DB read, offloaded to thread
+    rag_ctx = await asyncio.to_thread(_build_rag_context)
 
     # Build initial prompt (includes Fix 4: upstream context from state)
     user_prompt = _build_user_prompt(features, state, rag_ctx)
@@ -195,7 +197,8 @@ def run_behavioral_agent(features: BehavioralInput, state: SessionState) -> Agen
                 if last_error else user_prompt
             )
 
-            raw = qwen_chat(SYSTEM_PROMPT, prompt)
+            # Offload blocking Qwen HTTP call to a thread
+            raw = await asyncio.to_thread(qwen_chat, SYSTEM_PROMPT, prompt)
             data = json.loads(raw)
 
             result = AgentResult(**data)
@@ -203,15 +206,16 @@ def run_behavioral_agent(features: BehavioralInput, state: SessionState) -> Agen
             if not (0.0 <= result.risk <= 1.0 and 0.0 <= result.confidence <= 1.0):
                 raise ValueError(f"Score out of range: risk={result.risk}, confidence={result.confidence}")
 
-            # Fix 2: Store result to RAG history after successful parse
-            store_agent_result(
-                session_id=state.session_id,
-                agent_step=AGENT_STEP,
-                input_features=features.model_dump(),
-                risk=result.risk,
-                confidence=result.confidence,
-                flags=result.flags,
-                explanation=result.explanation,
+            # Fix 2: Store result (sync DB write, offloaded)
+            await asyncio.to_thread(
+                store_agent_result,
+                state.session_id,
+                AGENT_STEP,
+                features.model_dump(),
+                result.risk,
+                result.confidence,
+                result.flags,
+                result.explanation,
             )
 
             # Fix 4: Write to SessionState for downstream agents to read
