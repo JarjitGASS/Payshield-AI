@@ -2,7 +2,7 @@ import math
 import redis
 import json
 import os
-
+from database.redis_client import redis_client
 
 #shannon entropy
 def click_entropy(clicks) -> float:
@@ -22,9 +22,9 @@ def click_entropy(clicks) -> float:
 
 def store_click_position(user_id, x: int, y: int):
     key = f"user:{user_id}:click_positions"
-    database.redis_client.rpush(key, json.dumps({"x": x, "y": y}))
+    redis_client.rpush(key, json.dumps({"x": x, "y": y}))
 
 def navigation_consistency_score(user_id, int) -> float:
     key = f"user:{user_id}:click_positions"
-    clicks = [json.loads(c) for c in database.redis_client.redis_client.lrange(key, 0, -1)]
+    clicks = [json.loads(c) for c in redis_client.lrange(key, 0, -1)]
     entropy = click_entropy(clicks)

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import GoToHomePage from "../component/goToHomePage.component";
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -75,6 +76,7 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen w-screen flex items-center justify-center bg-gray-100 p-6">
+      <GoToHomePage/>
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg">
         {/* Step Indicator */}
         <div className="flex justify-between mb-8 px-4">

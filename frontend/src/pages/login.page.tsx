@@ -1,6 +1,7 @@
 import { useState } from "react";
 import useBehavioralMonitor from "../hooks/useBehavioralMonitor.hook";
 import useGetXsrfToken from "../hooks/useGetXsrfToken.hook";
+import GoToHomePage from "../component/goToHomePage.component";
 
 export default function LoginPage() {
   useGetXsrfToken();
@@ -32,6 +33,7 @@ export default function LoginPage() {
         credentials: "include", 
         headers: {
           "Content-Type": "application/json",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           "X-CSRF-Token": (window as any).csrfToken,
         },
         body: JSON.stringify(payload),
@@ -49,6 +51,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen w-screen flex items-center justify-center bg-gray-100 p-4">
+      <GoToHomePage></GoToHomePage>
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
         <h1 className="text-3xl font-bold text-center text-gray-800 mb-8">Login</h1>
         

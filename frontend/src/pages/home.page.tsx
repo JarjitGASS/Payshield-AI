@@ -2,14 +2,17 @@ import { motion, useScroll, useTransform } from 'framer-motion';
 import { upAndDown } from '../component/upAndDown.componet';
 
 const features = [
-  { title: "Fraud Protection", description: "Advanced AI-driven security layers.", url: "" },
-  { title: "Instant Transfers", description: "Global settlements in under 2 seconds.", url: "" },
+  { 
+    title: "Behavioral Analysis", 
+    description: "leverage AI to analyze user behavior and detect anomalies in real-time.", 
+    url: "/login" 
+  },
+  { title: "KYC Automation", description: "Automated identity verification and compliance checks.", url: "/register" },
   { title: "Global Compliance", description: "Built-in KYC and AML automation.",url: "" },
   { title: "Merchant Tools", description: "Customizable checkout experiences.", url: "" },
 ];
 
 export default function HomePage() {
-  // We use scroll progress to hide the "Scroll More" at the bottom
   const { scrollYProgress } = useScroll();
   const opacity = useTransform(scrollYProgress, [0, 0.9], [1, 0]);
 
