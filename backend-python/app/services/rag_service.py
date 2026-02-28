@@ -165,12 +165,14 @@ def store_orchestrator_result(
     confidence: float,
     explanation: str,
     flags: list,
+    user_id: Optional[str] = None,
 ) -> None:
     """Store an orchestrator result into the RAG history table."""
     with _get_db() as db:
         try:
             record = OrchestratorHistory(
                 session_id=session_id,
+                user_id=user_id,
                 identity_risk=identity_risk,
                 behavior_risk=behavior_risk,
                 network_risk=network_risk,
@@ -221,6 +223,7 @@ def store_human_review(
 
             return {
                 "session_id": record.session_id,
+                "user_id": record.user_id,
                 "original_decision": record.decision,
                 "override_decision": record.human_override_decision,
                 "override_note": record.human_override_note,

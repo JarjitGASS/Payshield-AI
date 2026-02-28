@@ -10,6 +10,7 @@ from dtos.meta_agent_result import MetaAgentResult
 from dtos.session_state import SessionState, SessionStatus
 from services.adaptive_threshold import get_adaptive_thresholds
 from services.rag_service import store_orchestrator_result
+from services.user_activation import activate_user, deactivate_user
 
 # Fallback defaults (used if adaptive service is unreachable)
 FALLBACK_APPROVE = 0.3
@@ -71,6 +72,7 @@ def _store_final_result_sync(result: MetaAgentResult, state: SessionState) -> No
     try:
         store_orchestrator_result(
             session_id=state.session_id,
+            user_id=state.user_id,
             identity_risk=result.identity_risk,
             behavior_risk=result.behavior_risk,
             network_risk=result.network_risk,
@@ -163,5 +165,19 @@ async def enforce_policy(result: MetaAgentResult, state: SessionState) -> MetaAg
 
     # Store final decision to RAG for future threshold adaptation (offloaded)
     await asyncio.to_thread(_store_final_result_sync, result, state)
+
+    # ── User Activation / Deactivation ──────────────────────
+    # APPROVE → activate user, REJECT → deactivate user, REVIEW → no action
+    if state.user_id and result.decision in ("APPROVE", "REJECT"):
+        try:
+            if result.decision == "APPROVE":
+                activation_result = await asyncio.to_thread(activate_user, state.user_id)
+                print(f"[Guardrails] User {state.user_id} activated after APPROVE")
+            elif result.decision == "REJECT":
+                activation_result = await asyncio.to_thread(deactivate_user, state.user_id)
+                print(f"[Guardrails] User {state.user_id} deactivated after REJECT")
+        except (ValueError, RuntimeError) as e:
+            print(f"[Guardrails] User activation/deactivation failed: {e}")
+            state.errors.append(f"User activation failed: {e}")
 
     return result
