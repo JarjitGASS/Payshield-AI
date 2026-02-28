@@ -7,6 +7,7 @@ Meta-Agent Orchestrator — fully autonomous with:
   5. Adaptive threshold awareness for decision calibration
 """
 import json
+import asyncio
 from dtos.agent_result import AgentResult
 from dtos.meta_agent_result import MetaAgentResult
 from dtos.session_state import SessionState, SessionStatus
@@ -14,6 +15,7 @@ from qwen.qwen import qwen_chat
 from services.rag_service import (
     fetch_orchestrator_history,
     fetch_similar_flags_history,
+    fetch_human_review_context,
     store_orchestrator_result,
 )
 from services.adaptive_threshold import get_adaptive_thresholds
@@ -72,7 +74,7 @@ OUTPUT FORMAT (strict JSON, no extra text):
 
 
 def _build_rag_context(all_flags: list) -> str:
-    """Fetch historical orchestrator decisions and similar-flag cases (RAG)."""
+    """Fetch historical orchestrator decisions, similar-flag cases, and HITL reviews (RAG)."""
     parts = []
 
     # Recent orchestrator decisions — returns a formatted string directly
@@ -91,6 +93,16 @@ def _build_rag_context(all_flags: list) -> str:
             parts.append(
                 "These past cases had overlapping flags — ensure decision consistency.\n"
             )
+
+    # Human-in-the-loop analyst reviews — learn from human corrections
+    hitl_context = fetch_human_review_context(limit=5)
+    if hitl_context:
+        parts.append("\n--- HUMAN ANALYST REVIEWS (HITL) ---")
+        parts.append(hitl_context)
+        parts.append(
+            "These are real analyst corrections. If the analyst CORRECTED the AI, "
+            "adjust your reasoning to avoid repeating the same mistake.\n"
+        )
 
     return "\n".join(parts)
 
@@ -206,16 +218,16 @@ Return corrected JSON only.
 """
 
 
-def run_orchestrator(
+async def run_orchestrator(
     identity: AgentResult,
     behavioral: AgentResult,
     network: AgentResult,
     state: SessionState,
 ) -> MetaAgentResult:
     """
-    DECISION MAKING AUTONOMY + REASON-ACT LOOP:
+    DECISION MAKING AUTONOMY + REASON-ACT LOOP (async):
     1. REASON: Consolidate all 3 agent outputs + RAG + inter-agent context.
-    2. ACT:    Call Qwen to produce autonomous final decision.
+    2. ACT:    Call Qwen (offloaded to thread) to produce autonomous final decision.
     3. VALIDATE: Parse and validate the meta-agent output.
     4. CORRECT: If output invalid, inject corrective feedback and retry.
     5. STORE:  Persist result to RAG history for future sessions.
@@ -223,8 +235,8 @@ def run_orchestrator(
     """
     state.transition(SessionStatus.ORCHESTRATING, step=f"Running {AGENT_STEP}")
 
-    # ── Fetch adaptive thresholds ───────────────────────────
-    thresholds = get_adaptive_thresholds()
+    # Fetch adaptive thresholds (sync, offloaded)
+    thresholds = await asyncio.to_thread(get_adaptive_thresholds)
     system_prompt = _build_system_prompt(thresholds)
 
     # If any agent has AGENT_FAILURE, force REVIEW before even calling LLM
@@ -245,26 +257,26 @@ def run_orchestrator(
         state.final_overall_risk = 0.5
         state.transition(SessionStatus.REVIEW, step="Escalated due to AGENT_FAILURE")
 
-        # Store even failure cases for RAG learning
-        store_orchestrator_result(
-            session_id=state.session_id,
-            identity_risk=fallback.identity_risk,
-            behavior_risk=fallback.behavior_risk,
-            network_risk=fallback.network_risk,
-            overall_risk=fallback.overall_risk,
-            decision=fallback.decision,
-            confidence=fallback.confidence,
-            explanation=fallback.explanation,
-            flags=fallback.flags,
+        await asyncio.to_thread(
+            store_orchestrator_result,
+            state.session_id,
+            fallback.identity_risk,
+            fallback.behavior_risk,
+            fallback.network_risk,
+            fallback.overall_risk,
+            fallback.decision,
+            fallback.confidence,
+            fallback.explanation,
+            fallback.flags,
         )
         return fallback
 
-    user_prompt = _build_user_prompt(identity, behavioral, network, state)
+    # Build RAG context (sync DB, offloaded)
+    user_prompt = await asyncio.to_thread(_build_user_prompt, identity, behavioral, network, state)
     last_error = None
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            # On retry, inject corrective feedback
             prompt = (
                 _build_corrective_prompt(
                     identity, behavioral, network, state, last_error, attempt
@@ -272,12 +284,12 @@ def run_orchestrator(
                 if last_error else user_prompt
             )
 
-            raw = qwen_chat(system_prompt, prompt)
+            # Offload blocking Qwen HTTP call to a thread
+            raw = await asyncio.to_thread(qwen_chat, system_prompt, prompt)
             data = json.loads(raw)
 
             result = MetaAgentResult(**data)
 
-            # Validate all score fields
             scores = [
                 result.identity_risk, result.behavior_risk,
                 result.network_risk, result.overall_risk, result.confidence
@@ -287,20 +299,20 @@ def run_orchestrator(
             if result.decision not in ["APPROVE", "REVIEW", "REJECT"]:
                 raise ValueError(f"Invalid decision: {result.decision}")
 
-            # ── STORE: Persist to RAG history ───────────────
-            store_orchestrator_result(
-                session_id=state.session_id,
-                identity_risk=result.identity_risk,
-                behavior_risk=result.behavior_risk,
-                network_risk=result.network_risk,
-                overall_risk=result.overall_risk,
-                decision=result.decision,
-                confidence=result.confidence,
-                explanation=result.explanation,
-                flags=result.flags,
+            # Store result (sync DB write, offloaded)
+            await asyncio.to_thread(
+                store_orchestrator_result,
+                state.session_id,
+                result.identity_risk,
+                result.behavior_risk,
+                result.network_risk,
+                result.overall_risk,
+                result.decision,
+                result.confidence,
+                result.explanation,
+                result.flags,
             )
 
-            # Store result in session state
             state.meta_result = result.model_dump()
             state.final_decision = result.decision
             state.final_overall_risk = result.overall_risk
@@ -331,16 +343,16 @@ def run_orchestrator(
     state.merge_flags(fallback.flags)
     state.transition(SessionStatus.REVIEW, step="Orchestrator failed, escalated to REVIEW")
 
-    # Store failure for RAG learning
-    store_orchestrator_result(
-        session_id=state.session_id,
-        identity_risk=fallback.identity_risk,
-        behavior_risk=fallback.behavior_risk,
-        network_risk=fallback.network_risk,
-        overall_risk=fallback.overall_risk,
-        decision=fallback.decision,
-        confidence=fallback.confidence,
-        explanation=fallback.explanation,
-        flags=fallback.flags,
+    await asyncio.to_thread(
+        store_orchestrator_result,
+        state.session_id,
+        fallback.identity_risk,
+        fallback.behavior_risk,
+        fallback.network_risk,
+        fallback.overall_risk,
+        fallback.decision,
+        fallback.confidence,
+        fallback.explanation,
+        fallback.flags,
     )
     return fallback
