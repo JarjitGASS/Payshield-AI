@@ -191,3 +191,129 @@ def store_orchestrator_result(
         except Exception as e:
             db.rollback()
             print(f"[RAG] Failed to store orchestrator result: {e}")
+
+
+# ─────────────────────────────────────────────────────────────
+# HITL: Human-in-the-Loop review storage and retrieval
+# ─────────────────────────────────────────────────────────────
+
+def store_human_review(
+    session_id: str,
+    override_decision: str,
+    override_note: str,
+) -> dict:
+    """
+    Store a human analyst's review for a given session.
+
+    Updates the existing OrchestratorHistory row with the analyst's
+    override decision and note. Returns the updated record as a dict,
+    or raises ValueError / RuntimeError on failure.
+    """
+    with _get_db() as db:
+        try:
+            record = (
+                db.query(OrchestratorHistory)
+                .filter(OrchestratorHistory.session_id == session_id)
+                .first()
+            )
+            if not record:
+                raise ValueError(f"Session {session_id} not found in orchestrator history")
+
+            if record.human_override_decision is not None:
+                raise ValueError(
+                    f"Session {session_id} has already been reviewed "
+                    f"(override={record.human_override_decision})"
+                )
+
+            record.human_override_decision = override_decision
+            record.human_override_note = override_note
+            db.commit()
+            db.refresh(record)
+
+            return {
+                "session_id": record.session_id,
+                "original_decision": record.decision,
+                "override_decision": record.human_override_decision,
+                "override_note": record.human_override_note,
+                "overall_risk": record.overall_risk,
+            }
+        except ValueError:
+            raise
+        except Exception as e:
+            db.rollback()
+            raise RuntimeError(f"Failed to store human review: {e}")
+
+
+def fetch_human_review_context(limit: int = 5) -> str:
+    """
+    Retrieve recent HITL-reviewed sessions for RAG prompt injection.
+
+    Returns a formatted string containing analyst overrides so agents
+    can learn from human corrections and calibrate their reasoning.
+    Only returns sessions where an analyst has actually submitted a review.
+    """
+    with _get_db() as db:
+        try:
+            rows = (
+                db.query(OrchestratorHistory)
+                .filter(OrchestratorHistory.human_override_decision.isnot(None))
+                .order_by(OrchestratorHistory.updated_at.desc())
+                .limit(limit)
+                .all()
+            )
+            if not rows:
+                return ""
+
+            context_lines = []
+            for row in rows:
+                was_correct = row.human_override_decision == row.decision
+                verdict = "CONFIRMED" if was_correct else "CORRECTED"
+                context_lines.append(
+                    f"- Session {row.session_id}: "
+                    f"AI_decision={row.decision}, "
+                    f"analyst_override={row.human_override_decision} ({verdict}), "
+                    f"overall_risk={row.overall_risk:.2f}, "
+                    f"flags={row.flags}, "
+                    f"analyst_note=\"{row.human_override_note}\""
+                )
+            return (
+                "Recent human analyst reviews (use these to calibrate your decisions):\n"
+                + "\n".join(context_lines)
+            )
+        except Exception as e:
+            return f"HITL RAG fetch failed: {e}"
+
+
+def fetch_pending_reviews(limit: int = 20) -> list:
+    """
+    Retrieve sessions with REVIEW decision that have NOT yet been
+    reviewed by a human analyst. Used by the pending-reviews endpoint.
+    """
+    with _get_db() as db:
+        try:
+            rows = (
+                db.query(OrchestratorHistory)
+                .filter(OrchestratorHistory.decision == "REVIEW")
+                .filter(OrchestratorHistory.human_override_decision.is_(None))
+                .order_by(OrchestratorHistory.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+            return [
+                {
+                    "session_id": row.session_id,
+                    "overall_risk": row.overall_risk,
+                    "identity_risk": row.identity_risk,
+                    "behavior_risk": row.behavior_risk,
+                    "network_risk": row.network_risk,
+                    "confidence": row.confidence,
+                    "decision": row.decision,
+                    "flags": row.flags,
+                    "explanation": row.explanation,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                }
+                for row in rows
+            ]
+        except Exception as e:
+            print(f"[RAG] Failed to fetch pending reviews: {e}")
+            return []

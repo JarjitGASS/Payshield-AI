@@ -30,12 +30,15 @@ from dtos.identity_input import IdentityInput
 from dtos.behavioral_input import BehavioralInput
 from dtos.network_input import NetworkInput
 from dtos.session_state import SessionState
+from dtos.human_review_input import HumanReviewInput, HumanReviewResponse, ReviewRating
 from agents.identity_risk_agent import run_identity_agent
 from agents.behavioral_agent import run_behavioral_agent
 from agents.synthetic_network_agent import run_network_agent
 from agents.orchestrator import run_orchestrator
 from guardrails.result_validation import enforce_policy
-
+from services.rag_service import store_human_review, fetch_pending_reviews
+import uuid
+import asyncio
 
 load_dotenv()
 database.database.Base.metadata.create_all(bind=database.database.engine)
@@ -181,7 +184,7 @@ async def agentic_risk_assessment(
     behavioral: BehavioralInput,
     network: NetworkInput,
 ):
-    state = SessionState(session_id="api-session")
+    state = SessionState(session_id=str(uuid.uuid4()))
     
     identity_result = await run_identity_agent(identity, state)
     behavioral_result = await run_behavioral_agent(behavioral, state)
@@ -195,4 +198,69 @@ async def agentic_risk_assessment(
         "session_state": state.model_dump(),
         "final_decision": final_result.decision,
         "meta_result": final_result.model_dump(),
+    }
+
+
+# ─────────────────────────────────────────────────────────────
+# HITL: Human-in-the-Loop review endpoints
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/human-review", response_model=HumanReviewResponse)
+async def submit_human_review(body: HumanReviewInput):
+    """
+    Submit a human analyst's review for a REVIEW-flagged session.
+
+    - If rating == GOOD: the AI decision was correct. Override decision = original decision.
+    - If rating == BAD:  override_decision is required (APPROVE or REJECT).
+
+    The review is stored in OrchestratorHistory and injected into future
+    agent RAG context so the system learns from analyst corrections.
+    """
+    # Determine the effective override decision
+    if body.rating == ReviewRating.BAD:
+        if body.override_decision is None:
+            raise HTTPException(
+                status_code=422,
+                detail="override_decision is required when rating is BAD"
+            )
+        applied_decision = body.override_decision.value
+    else:
+        # GOOD rating — analyst confirms the AI decision was correct
+        # We still store the review but mark the override as the analyst's confirmation
+        applied_decision = body.override_decision.value if body.override_decision else "CONFIRMED"
+
+    # Build the override note with rating context
+    override_note = f"[{body.rating.value}] {body.note}"
+
+    try:
+        result = await asyncio.to_thread(
+            store_human_review,
+            session_id=body.session_id,
+            override_decision=applied_decision,
+            override_note=override_note,
+        )
+        return HumanReviewResponse(
+            session_id=body.session_id,
+            applied_decision=applied_decision,
+            message=(
+                f"Review stored. Original decision: {result['original_decision']}, "
+                f"analyst override: {applied_decision}"
+            ),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/human-review/pending")
+async def get_pending_reviews():
+    """
+    List sessions flagged as REVIEW that have NOT yet been reviewed
+    by a human analyst. Returns session details for the analyst dashboard.
+    """
+    pending = await asyncio.to_thread(fetch_pending_reviews, limit=20)
+    return {
+        "count": len(pending),
+        "pending_reviews": pending,
     }
