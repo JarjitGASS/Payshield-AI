@@ -62,7 +62,8 @@ FINAL JSON OUTPUT SCHEMA
     "name": string | null,
     "gender": "LAKI-LAKI" | "PEREMPUAN" | null,
     "place_of_birth": string | null,
-    "date_of_birth": string | null
+    "date_of_birth": string | null,
+    "overall_match_score": number
   },
   "verification_result": {
     "generated_by_ai": "YES" | "NO" | "UNCLEAR",
@@ -77,7 +78,7 @@ FINAL JSON OUTPUT SCHEMA
 }
 
 FINAL CONSTRAINTS:
-- confidence_score must be between 0 and 100
+- confidence_score and overall_match_score must be between 0 and 1
 - reasoning must be brief, factual, and based only on visible evidence
 - Output EXACTLY one JSON object matching the schema above
   """
