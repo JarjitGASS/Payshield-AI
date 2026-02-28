@@ -19,6 +19,5 @@ def get_network_signals(client_ip: str, device_id: str, login_history: list) -> 
     
     return NetworkInput(
         shared_device_count=shared_device_count,
-        shared_ip_count=shared_ip_count,
-        cross_merchant_reuse=False
+        shared_ip_count=shared_ip_count
     )
