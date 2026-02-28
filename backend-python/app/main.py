@@ -200,11 +200,6 @@ async def agentic_risk_assessment(
         "meta_result": final_result.model_dump(),
     }
 
-
-# ─────────────────────────────────────────────────────────────
-# HITL: Human-in-the-Loop review endpoints
-# ─────────────────────────────────────────────────────────────
-
 @app.post("/human-review", response_model=HumanReviewResponse)
 async def submit_human_review(body: HumanReviewInput):
     """
@@ -216,7 +211,6 @@ async def submit_human_review(body: HumanReviewInput):
     The review is stored in OrchestratorHistory and injected into future
     agent RAG context so the system learns from analyst corrections.
     """
-    # Determine the effective override decision
     if body.rating == ReviewRating.BAD:
         if body.override_decision is None:
             raise HTTPException(
@@ -251,7 +245,6 @@ async def submit_human_review(body: HumanReviewInput):
         raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/human-review/pending")
 async def get_pending_reviews():

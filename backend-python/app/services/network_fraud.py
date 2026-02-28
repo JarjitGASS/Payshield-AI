@@ -18,7 +18,7 @@ async def evaluate_network_fraud_service(
 
     signals = get_network_signals(ip, device_id, login_history)
 
-    current_session_id = f"sess_{user_id}_{uuid.uuid4().hex[:6]}"
+    current_session_id = str(uuid.uuid4())
     
     state = SessionState(
         session_id=current_session_id,

@@ -43,7 +43,7 @@ OUTPUT FORMAT (strict JSON, no extra text):
 }}}}
 
 AVAILABLE FLAGS:
-- DEVICE_SHARED_NETWORK, IP_CLUSTER, CROSS_MERCHANT_REUSE,
+- DEVICE_SHARED_NETWORK, IP_CLUSTER,
   RAPID_ACCOUNT_CREATION
 """
 
@@ -137,8 +137,6 @@ Evaluate synthetic network risk from these signals:
   (>1 = same device fingerprint on multiple accounts)
 - shared_ip_count: {features.shared_ip_count}
   (>3 in 30 days = suspicious IP cluster)
-- cross_merchant_reuse: {features.cross_merchant_reuse}
-  (true = device/phone seen across different merchants)
 {rag_ctx}{cal_ctx}{upstream_ctx}{tools_ctx}
 
 Return JSON only.

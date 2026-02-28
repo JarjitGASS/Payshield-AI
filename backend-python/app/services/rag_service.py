@@ -92,7 +92,6 @@ def fetch_orchestrator_history(
         except Exception as e:
             return f"RAG orchestrator fetch failed: {e}"
 
-
 def fetch_similar_flags_history(flags: List[str], limit: int = 3) -> str:
     """
     Retrieve historical cases that share the same flags as the current assessment.
@@ -127,11 +126,6 @@ def fetch_similar_flags_history(flags: List[str], limit: int = 3) -> str:
             return "Historical cases with similar flags:\n" + "\n".join(context_lines)
         except Exception as e:
             return f"RAG similar-flags fetch failed: {e}"
-
-
-# ─────────────────────────────────────────────────────────────
-# STORE: Save agent results for future RAG retrieval
-# ─────────────────────────────────────────────────────────────
 
 def store_agent_result(
     session_id: str,
@@ -192,11 +186,6 @@ def store_orchestrator_result(
             db.rollback()
             print(f"[RAG] Failed to store orchestrator result: {e}")
 
-
-# ─────────────────────────────────────────────────────────────
-# HITL: Human-in-the-Loop review storage and retrieval
-# ─────────────────────────────────────────────────────────────
-
 def store_human_review(
     session_id: str,
     override_decision: str,
@@ -242,7 +231,6 @@ def store_human_review(
         except Exception as e:
             db.rollback()
             raise RuntimeError(f"Failed to store human review: {e}")
-
 
 def fetch_human_review_context(limit: int = 5) -> str:
     """
