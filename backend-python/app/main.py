@@ -26,6 +26,15 @@ from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 import secrets, time
 from middleware.middleware import bot_protect
+from dtos.identity_input import IdentityInput
+from dtos.behavioral_input import BehavioralInput
+from dtos.network_input import NetworkInput
+from dtos.session_state import SessionState
+from agents.identity_risk_agent import run_identity_agent
+from agents.behavioral_agent import run_behavioral_agent
+from agents.synthetic_network_agent import run_network_agent
+from agents.orchestrator import run_orchestrator
+from guardrails.result_validation import enforce_policy
 
 
 load_dotenv()
@@ -165,3 +174,25 @@ class LoginHourRequest(BaseModel):
 @router.post("/check-login-hour")
 async def login_hour_endpoint(user_id: str):
     return await login_hour_service(user_id, redis_client)
+
+@app.post("/agentic-risk-assessment")
+async def agentic_risk_assessment(
+    identity: IdentityInput,
+    behavioral: BehavioralInput,
+    network: NetworkInput,
+):
+    state = SessionState(session_id="api-session")
+    
+    identity_result = await run_identity_agent(identity, state)
+    behavioral_result = await run_behavioral_agent(behavioral, state)
+    network_result = await run_network_agent(network, state)
+
+    meta_result = await run_orchestrator(identity_result, behavioral_result, network_result, state)
+
+    final_result = await enforce_policy(meta_result, state)
+
+    return {
+        "session_state": state.model_dump(),
+        "final_decision": final_result.decision,
+        "meta_result": final_result.model_dump(),
+    }
