@@ -28,7 +28,6 @@ export default function LoginPage() {
     };
 
     try {
-      conso
       const response = await fetch("http://localhost:8000/auth/login", {
         method: "POST",
         credentials: "include", 
