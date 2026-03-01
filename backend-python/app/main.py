@@ -159,7 +159,7 @@ async def store_click(
     return {
         "status": "ok",
         "user_id": user_id,
-        "result": result,
+        "entropy": result,
     }
 
 @app.post("/verify-network-fraud")

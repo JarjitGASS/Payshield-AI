@@ -26,7 +26,7 @@ export default function ClickTestPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        showNotification(`Stored click at ${x},${y}`);
+        showNotification(`Stored click at ${x},${y}, entropy: ${data.entropy}`);
       } else {
         showNotification(`Error: ${data.detail || res.statusText}`);
       }
@@ -39,7 +39,6 @@ export default function ClickTestPage() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-100" onClick={handleClick}>
       <GoToHomePage />
-      {/* Navbar */}
       <nav className="bg-blue-600 text-white px-6 py-4 flex justify-between items-center">
         <div className="text-lg font-semibold">ClickTest</div>
         <div className="space-x-6 text-sm font-medium">
@@ -55,7 +54,6 @@ export default function ClickTestPage() {
         </div>
       </nav>
 
-      {/* Hero Section */}
       <main className="flex-1 flex items-center justify-center px-6">
         <div className="bg-white rounded-xl shadow-lg p-10 max-w-xl w-full text-center">
           <h1 className="text-3xl font-bold text-gray-800 mb-4">
@@ -76,7 +74,6 @@ export default function ClickTestPage() {
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="text-center text-sm text-gray-500 py-4">
         © 2026 ClickTest. All rights reserved.
       </footer>
