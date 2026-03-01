@@ -203,29 +203,30 @@ class LoginHourRequest(BaseModel):
     user_id: str
     hours: list[int] = [] 
 
+class AgenticRiskAssessmentRequest(BaseModel):
+    user_id: str
+    identity: IdentityInput
+    behavioral: BehavioralInput
+    network: NetworkInput
+
 @router.post("/check-login-hour")
 async def login_hour_endpoint(user_id: str):
     return await login_hour_service(user_id, redis_client)
 
 @app.post("/agentic-risk-assessment")
-async def agentic_risk_assessment(
-    identity: IdentityInput,
-    behavioral: BehavioralInput,
-    network: NetworkInput,
-    user_id: str = Form(...),
-):
-    state = SessionState(session_id=str(uuid.uuid4()), user_id=user_id)
+async def agentic_risk_assessment(request: AgenticRiskAssessmentRequest):
+    state = SessionState(session_id=str(uuid.uuid4()), user_id=request.user_id)
     
-    identity_result = await run_identity_agent(identity, state)
-    behavioral_result = await run_behavioral_agent(behavioral, state)
-    network_result = await run_network_agent(network, state)
+    identity_result = await run_identity_agent(request.identity, state)
+    behavioral_result = await run_behavioral_agent(request.behavioral, state)
+    network_result = await run_network_agent(request.network, state)
 
     meta_result = await run_orchestrator(identity_result, behavioral_result, network_result, state)
 
     final_result = await enforce_policy(meta_result, state)
 
     return {
-        "user_id": user_id,
+        "user_id": request.user_id,
         "session_state": state.model_dump(),
         "final_decision": final_result.decision,
         "meta_result": final_result.model_dump(),
@@ -303,3 +304,18 @@ async def get_pending_reviews():
         "count": len(pending),
         "pending_reviews": pending,
     }
+
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc: RequestValidationError):
+    print(exc.errors())
+    return JSONResponse(
+        status_code=422,
+        content={
+            "success": False,
+            "message": "Validation failed",
+            "errors": exc.errors(),  # ✅ SAFE, JSON serializable
+        },
+    )

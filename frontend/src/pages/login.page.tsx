@@ -28,7 +28,7 @@ export default function LoginPage() {
     };
 
     try {
-      console.log(JSON.stringify(payload))
+      conso
       const response = await fetch("http://localhost:8000/auth/login", {
         method: "POST",
         credentials: "include", 

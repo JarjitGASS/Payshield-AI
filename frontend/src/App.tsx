@@ -8,6 +8,7 @@ import GeoIpPage from "./pages/geoIp.page";
 import SentimentEntityPage from "./pages/sentimentEntity.page";
 import NetworkFraudPage from "./pages/networkFraud.page";
 import ClickTestPage from "./pages/clickTest.page";
+import AgenticRiskAssessmentPage from "./pages/agenticRiskAssessment.page";
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
         <Route path="/sentiment-entity" element={<SentimentEntityPage />} />
         <Route path="/network-fraud" element={<NetworkFraudPage />} />
         <Route path="/click-test" element={<ClickTestPage />} />
+        <Route path="/agentic-risk-assessment" element={<AgenticRiskAssessmentPage />} />
       </Routes>
     </BrowserRouter>
   )

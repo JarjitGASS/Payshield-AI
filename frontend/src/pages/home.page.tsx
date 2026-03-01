@@ -8,6 +8,7 @@ import CompanySentiment from '../assets/company.png'
 import NameEntropy from '../assets/nameEntropy.jpg'
 import EmailAge from '../assets/emailAge.png'
 import MouseClick from '../assets/mouse.png'
+import Agentic from '../assets/agentic.webp'
 
 const features = [
   { 
@@ -57,6 +58,12 @@ const features = [
     description: "Verify email address validity and check email account age to ensure legitimacy and detect recently created fraud accounts.", 
     url: "/bind-email",
     assetSrc: EmailAge
+  },
+  { 
+    title: "Agentic Risk Assessment", 
+    description: "Comprehensive fraud detection engine orchestrating identity, behavioral, and network analysis using AI agents with human-in-the-loop review capability.", 
+    url: "/agentic-risk-assessment",
+    assetSrc: Agentic
   }
 ];
 
