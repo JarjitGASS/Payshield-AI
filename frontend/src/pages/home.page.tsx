@@ -1,15 +1,63 @@
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { upAndDown } from '../component/upAndDown.componet';
+import InputBehavioral from '../assets/behavior.png'
+import KycOcr from '../assets/kycocr.png'
+import GeoIp from '../assets/geoIp.png'
+import DeviceFingerprint from '../assets/osFingerprint.webp'
+import CompanySentiment from '../assets/company.png'
+import NameEntropy from '../assets/nameEntropy.jpg'
+import EmailAge from '../assets/emailAge.png'
+import MouseClick from '../assets/mouse.png'
 
 const features = [
   { 
     title: "Behavioral Analysis", 
-    description: "leverage AI to analyze user behavior and detect anomalies in real-time.", 
-    url: "/login" 
+    description: "Monitor user behavior patterns including mouse movements, clicks, typing speed, and interaction timing to detect anomalies and suspicious activity during login.", 
+    url: "/login" ,
+    assetSrc: InputBehavioral
   },
-  { title: "KYC Automation", description: "Automated identity verification and compliance checks.", url: "/register" },
-  { title: "Global Compliance", description: "Built-in KYC and AML automation.",url: "" },
-  { title: "Merchant Tools", description: "Customizable checkout experiences.", url: "" },
+  { 
+    title: "KYC Automation", 
+    description: "Automated identity verification with ID card OCR, NIK validation, email verification, and name entropy analysis to prevent fraud during user registration.", 
+    url: "/register",
+    assetSrc: KycOcr
+  },
+  { 
+    title: "IP Location Verification", 
+    description: "Verify user's declared location against actual IP geolocation to detect location spoofing, VPN usage, and impossible travel patterns.", 
+    url: "/geo-ip" ,
+    assetSrc: GeoIp
+  },
+  { 
+    title: "Network Fraud Detection", 
+    description: "Analyze device fingerprints, network signals, browser type, timezone, screen resolution, and login history to detect bot activity and network-based fraud.", 
+    url: "/network-fraud",
+    assetSrc: DeviceFingerprint
+  },
+  { 
+    title: "Click Pattern Analysis", 
+    description: "Track and analyze user click positions, timing, and movement patterns to build behavioral fingerprints and calculate navigation consistency scores.", 
+    url: "/click-test",
+    assetSrc: MouseClick
+  },
+  { 
+    title: "Company Sentiment Analysis", 
+    description: "Analyze company reputation and sentiment through NLP to assess merchant legitimacy, detect fraud patterns, and identify risky business entities.", 
+    url: "/sentiment-entity",
+    assetSrc: CompanySentiment
+  },
+  { 
+    title: "Name Entropy Validation", 
+    description: "Validate user names using Shannon entropy and n-gram analysis to detect synthetic, suspicious, or randomly generated names.", 
+    url: "/name-entropy",
+    assetSrc: NameEntropy
+  },
+  { 
+    title: "Email Age Verification", 
+    description: "Verify email address validity and check email account age to ensure legitimacy and detect recently created fraud accounts.", 
+    url: "/bind-email",
+    assetSrc: EmailAge
+  }
 ];
 
 export default function HomePage() {
@@ -76,9 +124,17 @@ export default function HomePage() {
             
             <div className="relative group hover:scale-105 transition-transform duration-300">
               <div className="absolute -inset-4 bg-linear-to-tr from-blue-50 to-indigo-50 rounded-[40px] z-0 opacity-50 group-hover:opacity-100 transition-opacity" />
-              <div className="relative h-112.5 bg-white rounded-3xl border border-gray-100 shadow-2xl flex items-center justify-center overflow-hidden">
-                 <div className="w-24 h-24 bg-blue-50 rounded-full animate-pulse" />
-                 <span className="absolute bottom-8 text-gray-300 text-sm font-mono">ASSET_CONTAINER_{index + 1}</span>
+
+              <div className="relative h-112.5 bg-white rounded-3xl border border-gray-100 shadow-2xl flex items-center justify-center">
+                <div className="w-24 h-24 bg-blue-50 rounded-full animate-pulse" />
+
+                <div className="absolute inset-0 flex items-center justify-center p-6">
+                  <img
+                    src={feature.assetSrc}
+                    alt="Feature Asset"
+                    className="max-h-full max-w-full object-contain"
+                  />
+                </div>
               </div>
             </div>
           </motion.div>
