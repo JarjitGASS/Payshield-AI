@@ -28,3 +28,5 @@ def navigation_consistency_score(user_id, int) -> float:
     key = f"user:{user_id}:click_positions"
     clicks = [json.loads(c) for c in redis_client.lrange(key, 0, -1)]
     entropy = click_entropy(clicks)
+
+    return entropy

@@ -14,7 +14,7 @@ from services.name_entropy import shannon_entropy, has_digits_or_symbols, ngram_
 from services.verify_geoip import check_geo_ip, get_real_ip
 from services.sentiment_entity import analyze_company_sentiment
 from services.auth_service import login_service
-from services.navigation_consistency_score import store_click_position
+from services.navigation_consistency_score import navigation_consistency_score, store_click_position
 from services.login_hour import login_hour_service
 from database.redis_client import redis_client
 from dtos.auth_input import LoginRequest
@@ -153,7 +153,14 @@ async def store_click(
     y: int = Form(...)
 ):
     store_click_position(user_id, x, y)
-    return {"status": "ok", "user_id": user_id}
+
+    result = navigation_consistency_score(user_id, 0)
+    print(x, y, result, user_id)
+    return {
+        "status": "ok",
+        "user_id": user_id,
+        "result": result,
+    }
 
 @app.post("/verify-network-fraud")
 async def verify_network_fraud_endpoint(
